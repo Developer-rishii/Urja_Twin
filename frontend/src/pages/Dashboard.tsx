@@ -8,6 +8,9 @@ import {
   RefreshCw,
   TrendingUp,
   ArrowRight,
+  ShieldCheck,
+  Sparkles,
+  Calendar,
 } from "lucide-react";
 import {
   getPlantState,
@@ -37,27 +40,42 @@ export const Dashboard: React.FC<{ plantId: string }> = ({ plantId }) => {
   const [error, setError] = useState<string | null>(null);
   const [lastSyncTime, setLastSyncTime] = useState<string>("");
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [selectedIssueTime, setSelectedIssueTime] = useState<string>("");
 
   // Ref to track initial load so polling updates do not re-trigger mount animations
   const isInitialMount = useRef(true);
 
-  const fetchDashboardData = useCallback(async (isInitial = false) => {
+  const fetchDashboardData = useCallback(async (isInitial = false, customIssueTime?: string) => {
     if (isInitial && isInitialMount.current) setLoading(true);
     setIsRefreshing(true);
     setError(null);
 
     try {
-      const [stateRes, forecastRes, actualRes, schedRes, dsmRes, accRes] =
+      // 1. Fetch current plant state to determine active telemetry and sync horizon
+      const stateRes = await getPlantState(plantId);
+      setState(stateRes);
+
+      // Determine aligned issue_time across forecast, schedule, and DSM
+      // Solar historical benchmark: "2020-06-10T12:00:00"
+      // Wind historical benchmark: "2018-10-15T06:00:00"
+      const defaultHistorical = plantId.includes("wind")
+        ? "2018-10-15T06:00:00"
+        : "2020-06-10T12:00:00";
+
+      const effectiveIssueTime = customIssueTime !== undefined
+        ? customIssueTime
+        : (selectedIssueTime || defaultHistorical);
+
+      // 2. Fetch all telemetry & analytics concurrently with aligned issue_time
+      const [forecastRes, actualRes, schedRes, dsmRes, accRes] =
         await Promise.all([
-          getPlantState(plantId),
-          getPlantForecast(plantId),
+          getPlantForecast(plantId, effectiveIssueTime || undefined),
           getPlantActual(plantId, 96),
-          getPlantSchedule(plantId),
-          getPlantDSM(plantId),
+          getPlantSchedule(plantId, effectiveIssueTime || undefined),
+          getPlantDSM(plantId, effectiveIssueTime || undefined),
           getPlantAccuracy(plantId),
         ]);
 
-      setState(stateRes);
       setDsm(dsmRes);
       setAccuracy(accRes);
       setLastSyncTime(new Date().toLocaleTimeString());
@@ -66,8 +84,10 @@ export const Dashboard: React.FC<{ plantId: string }> = ({ plantId }) => {
       const tolPct = dsmRes.tolerance_pct || 10.0;
       const tolKw = capacityKw * (tolPct / 100.0);
 
+      // Handle either .readings or .actual from backend
+      const actualList = (actualRes as any).readings || (actualRes as any).actual || [];
       const actualMap = new Map<string, number>();
-      (actualRes.actual || []).forEach((a) => {
+      actualList.forEach((a: any) => {
         actualMap.set(a.ts, a.power_kw);
       });
 
@@ -111,14 +131,14 @@ export const Dashboard: React.FC<{ plantId: string }> = ({ plantId }) => {
       }
       setIsRefreshing(false);
     }
-  }, [plantId]);
+  }, [plantId, selectedIssueTime]);
 
   useEffect(() => {
     isInitialMount.current = true;
     fetchDashboardData(true);
   }, [fetchDashboardData]);
 
-  // Regular 5-second polling for real-time simulator blocks
+  // Regular 5-second polling for real-time simulator updates
   useEffect(() => {
     const interval = setInterval(() => {
       fetchDashboardData(false);
@@ -132,18 +152,81 @@ export const Dashboard: React.FC<{ plantId: string }> = ({ plantId }) => {
   const gapPct = state?.gap_pct ?? 0;
   const breachesCount = dsm?.total_breaches ?? 0;
   const exposurePct = dsm?.relative_exposure_pct ?? 0;
+  const capacityKw = state?.capacity_kw || 1000.0;
+  const isSolar = state?.plant_type === "solar_pv";
 
   return (
-    <div className="animate-fade-in" style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+    <div className="animate-fade-in" style={{ display: "flex", flexDirection: "column", gap: "1.5rem", width: "100%" }}>
       {/* SaaS Page Header */}
       <PageHeader
-        title="Generation & Dispatch Compliance"
+        title="Generation & Dispatch Intelligence"
         subtitle="15-minute resolution LightGBM forecast, continuous physics twin synchronization, and DSM penalty mitigation."
         actions={
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
-              Last sync: <strong style={{ color: "var(--text-secondary)" }}>{lastSyncTime || "Just now"}</strong>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+            {/* Synchronized Horizon Switcher */}
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                backgroundColor: "var(--bg-surface)",
+                border: "1px solid var(--border-default)",
+                borderRadius: "var(--radius-md)",
+                padding: "3px 8px",
+                fontSize: "0.76rem",
+              }}
+            >
+              <Calendar size={13} color="var(--sky-400)" />
+              <span style={{ color: "var(--text-muted)" }}>Horizon:</span>
+              <button
+                onClick={() => {
+                  const defaultHistorical = plantId.includes("wind") ? "2018-10-15T06:00:00" : "2020-06-10T12:00:00";
+                  setSelectedIssueTime(defaultHistorical);
+                  fetchDashboardData(false, defaultHistorical);
+                }}
+                style={{
+                  background: (!selectedIssueTime || selectedIssueTime.startsWith("2020") || selectedIssueTime.startsWith("2018"))
+                    ? "var(--sky-500)"
+                    : "transparent",
+                  color: (!selectedIssueTime || selectedIssueTime.startsWith("2020") || selectedIssueTime.startsWith("2018"))
+                    ? "#FFF"
+                    : "var(--text-secondary)",
+                  border: "none",
+                  borderRadius: "var(--radius-sm)",
+                  padding: "3px 7px",
+                  fontSize: "0.72rem",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Historical Replay 24h
+              </button>
+              {state?.last_ts && (
+                <button
+                  onClick={() => {
+                    setSelectedIssueTime(state.last_ts!);
+                    fetchDashboardData(false, state.last_ts!);
+                  }}
+                  style={{
+                    background: selectedIssueTime === state.last_ts ? "var(--sky-500)" : "transparent",
+                    color: selectedIssueTime === state.last_ts ? "#FFF" : "var(--text-secondary)",
+                    border: "none",
+                    borderRadius: "var(--radius-sm)",
+                    padding: "3px 7px",
+                    fontSize: "0.72rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  Latest Reading Sync
+                </button>
+              )}
+            </div>
+
+            <span style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>
+              Sync: <strong style={{ color: "var(--text-secondary)" }}>{lastSyncTime || "Just now"}</strong>
             </span>
+
             <button
               onClick={() => fetchDashboardData(false)}
               aria-label="Refresh telemetry data"
@@ -151,8 +234,8 @@ export const Dashboard: React.FC<{ plantId: string }> = ({ plantId }) => {
                 backgroundColor: "var(--bg-surface-elevated)",
                 color: "var(--sky-400)",
                 border: "1px solid var(--border-default)",
-                borderRadius: "var(--radius-sm)",
-                padding: "6px 12px",
+                borderRadius: "var(--radius-md)",
+                padding: "6px 14px",
                 fontSize: "0.78rem",
                 fontWeight: 600,
                 cursor: "pointer",
@@ -162,13 +245,13 @@ export const Dashboard: React.FC<{ plantId: string }> = ({ plantId }) => {
               }}
             >
               <RefreshCw size={13} className={isRefreshing ? "spin-icon" : ""} />
-              <span>Sync</span>
+              <span>Refresh</span>
             </button>
           </div>
         }
       />
 
-      {/* 4 Hero KPI Cards */}
+      {/* Primary KPI Grid (4 Metrics) */}
       <div
         style={{
           display: "grid",
@@ -178,7 +261,7 @@ export const Dashboard: React.FC<{ plantId: string }> = ({ plantId }) => {
       >
         <KpiCard
           label="Actual Generation"
-          value={`${state?.actual_kw.toLocaleString()} kW`}
+          value={`${(state?.actual_kw ?? 0).toLocaleString()} kW`}
           subValue={`Latest timestamp: ${state?.last_ts || "Awaiting packet"}`}
           icon={<Zap size={18} />}
           status="default"
@@ -188,11 +271,11 @@ export const Dashboard: React.FC<{ plantId: string }> = ({ plantId }) => {
 
         <KpiCard
           label="Physics Twin Expected"
-          value={`${state?.expected_kw.toLocaleString()} kW`}
-          subValue={state?.plant_type === "solar_pv" ? "PV cell temp & irradiance model" : "SCADA aerodynamic cubic equation"}
+          value={`${(state?.expected_kw ?? 0).toLocaleString()} kW`}
+          subValue={isSolar ? "PV cell temp & irradiance model" : "SCADA aerodynamic cubic equation"}
           icon={<Gauge size={18} />}
           status="default"
-          badge="PHYSICS"
+          badge="PHYSICS TWIN"
           tooltip="Instantaneous thermodynamic power equation output"
         />
 
@@ -217,7 +300,7 @@ export const Dashboard: React.FC<{ plantId: string }> = ({ plantId }) => {
         />
       </div>
 
-      {/* Hero Chart Section */}
+      {/* Hero Chart Section with Multi-Scale & Series Toggles */}
       <Card variant="default" padding="md">
         <div
           style={{
@@ -238,10 +321,15 @@ export const Dashboard: React.FC<{ plantId: string }> = ({ plantId }) => {
             </div>
             <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", margin: "4px 0 0 0" }}>
               15-minute resolution LightGBM forecast vs Committed Schedule with CERC ±{dsm?.tolerance_pct || 10}% tolerance zone
+              {(dsm as any)?.issue_time && (
+                <span style={{ color: "var(--sky-400)", marginLeft: "6px" }}>
+                  (Issue Time: {(dsm as any).issue_time})
+                </span>
+              )}
             </p>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
             {breachesCount > 0 && (
               <span
                 style={{
@@ -270,88 +358,141 @@ export const Dashboard: React.FC<{ plantId: string }> = ({ plantId }) => {
                 border: "1px solid var(--border-subtle)",
               }}
             >
-              Capacity: <strong>{state?.capacity_kw.toLocaleString()} kW</strong>
+              Capacity: <strong>{capacityKw.toLocaleString()} kW</strong>
             </span>
           </div>
         </div>
 
         <HeroChart
           data={chartData}
-          capacityKw={state?.capacity_kw || 1000.0}
+          capacityKw={capacityKw}
           tolerancePct={dsm?.tolerance_pct || 10.0}
         />
       </Card>
 
-      {/* Quick Navigation Cards linking to Existing Functional Pages */}
+      {/* Operational Intelligence & Dynamic Anomaly Insights Panel */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
           gap: "1rem",
         }}
       >
-        <Card variant="elevated" padding="md">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div>
-              <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--amber-400)", textTransform: "uppercase" }}>
-                Active Alerts & Schedule Revisions
-              </div>
-              <div style={{ fontSize: "0.95rem", fontWeight: 700, marginTop: "4px", color: "var(--text-primary)" }}>
-                {breachesCount > 0 ? `${breachesCount} DSM Breaches Detected` : "All Schedule Bands Compliant"}
-              </div>
-              <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "2px" }}>
-                View suggested zero-breach revised schedules & soiling status
-              </div>
-            </div>
+        {/* Real-time DSM Risk Assessment */}
+        <Card variant={breachesCount > 0 ? "breach" : "default"} padding="md">
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+            <AlertOctagon size={16} color={breachesCount > 0 ? "var(--breach-red)" : "var(--emerald-400)"} />
+            <h3 style={{ fontSize: "0.85rem", fontWeight: 700, margin: 0, color: "var(--text-primary)", textTransform: "uppercase" }}>
+              DSM Compliance Intelligence
+            </h3>
+          </div>
+          <div style={{ fontSize: "0.85rem", color: "var(--text-secondary)", lineHeight: 1.5 }}>
+            {breachesCount > 0 ? (
+              <>
+                Detected <strong style={{ color: "var(--breach-red)" }}>{breachesCount} schedule breach blocks</strong> across the active 24-hour dispatch horizon. Total relative exposure is <strong style={{ color: "var(--breach-red)" }}>{exposurePct.toFixed(1)}%</strong> of tolerance band volume.
+                Immediate schedule revision is recommended before the CERC gate closure cutoff.
+              </>
+            ) : (
+              <>
+                All 96 blocks are operating within the statutory CERC <strong style={{ color: "var(--emerald-400)" }}>±{dsm?.tolerance_pct || 10}%</strong> tolerance margin. No deviation penalty exposure detected for this dispatch horizon.
+              </>
+            )}
+          </div>
+          <div style={{ marginTop: "12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>
+              Tolerance: ±{(capacityKw * ((dsm?.tolerance_pct || 10) / 100)).toLocaleString()} kW
+            </span>
             <Link
               to="/alerts"
               style={{
+                fontSize: "0.76rem",
+                fontWeight: 600,
+                color: "var(--sky-400)",
+                textDecoration: "none",
                 display: "inline-flex",
                 alignItems: "center",
-                justifyContent: "center",
-                padding: "8px",
-                borderRadius: "var(--radius-md)",
-                backgroundColor: "var(--bg-app)",
-                color: "var(--sky-400)",
-                border: "1px solid var(--border-default)",
-                textDecoration: "none",
+                gap: "4px",
               }}
-              aria-label="Navigate to Alerts & DSM"
             >
-              <ArrowRight size={16} />
+              Review Revised Schedule <ArrowRight size={13} />
             </Link>
           </div>
         </Card>
 
+        {/* Physics Twin & Soiling Advisory */}
+        <Card variant={(state?.soiling_loss_pct || 0) > 10 ? "amber" : "default"} padding="md">
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+            <Sparkles size={16} color={(state?.soiling_loss_pct || 0) > 10 ? "var(--amber-400)" : "var(--sky-400)"} />
+            <h3 style={{ fontSize: "0.85rem", fontWeight: 700, margin: 0, color: "var(--text-primary)", textTransform: "uppercase" }}>
+              Physics Twin & Sensor Diagnostics
+            </h3>
+          </div>
+          <div style={{ fontSize: "0.85rem", color: "var(--text-secondary)", lineHeight: 1.5 }}>
+            {isSolar ? (
+              (state?.soiling_loss_pct || 0) > 10 ? (
+                <>
+                  Severe dust accumulation identified: estimated <strong style={{ color: "var(--amber-400)" }}>{state?.soiling_loss_pct.toFixed(1)}%</strong> generation reduction. Incurring potential lost generation of <strong style={{ color: "var(--amber-400)" }}>{Math.round(capacityKw * (state!.soiling_loss_pct / 100)).toLocaleString()} kW</strong>.
+                </>
+              ) : (
+                <>
+                  Solar panels are clean. Estimated soiling attenuation is <strong style={{ color: "var(--emerald-400)" }}>{state?.soiling_loss_pct.toFixed(2)}%</strong> (well below the 10% maintenance threshold).
+                </>
+              )
+            ) : (
+              <>
+                Wind turbine aerodynamic twin model tracking Betz cubic law. Edge sensor node status is <strong style={{ color: state?.node_status === "online" ? "var(--emerald-400)" : "var(--breach-red)" }}>{state?.node_status?.toUpperCase() || "OFFLINE"}</strong>.
+              </>
+            )}
+          </div>
+          <div style={{ marginTop: "12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>
+              Twin gap: {gapPct > 0 ? `+${gapPct}%` : `${gapPct}%`}
+            </span>
+            <Link
+              to="/twin"
+              style={{
+                fontSize: "0.76rem",
+                fontWeight: 600,
+                color: "var(--sky-400)",
+                textDecoration: "none",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+              }}
+            >
+              Inspect Telemetry & Model <ArrowRight size={13} />
+            </Link>
+          </div>
+        </Card>
+
+        {/* What-If Dispatch Optimization Sandbox */}
         <Card variant="elevated" padding="md">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div>
-              <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--sky-400)", textTransform: "uppercase" }}>
-                What-If Sandbox Scenarios
-              </div>
-              <div style={{ fontSize: "0.95rem", fontWeight: 700, marginTop: "4px", color: "var(--text-primary)" }}>
-                BESS Battery Storage & Panel Washing
-              </div>
-              <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "2px" }}>
-                Simulate corrective dispatch on an isolated twin clone
-              </div>
-            </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+            <ShieldCheck size={16} color="var(--emerald-400)" />
+            <h3 style={{ fontSize: "0.85rem", fontWeight: 700, margin: 0, color: "var(--text-primary)", textTransform: "uppercase" }}>
+              Corrective Dispatch Sandbox
+            </h3>
+          </div>
+          <div style={{ fontSize: "0.85rem", color: "var(--text-secondary)", lineHeight: 1.5 }}>
+            Simulate Battery Energy Storage System (BESS) peak-shaving and nocturnal dispatch or robotic panel washing on an isolated in-memory digital twin clone without disturbing live telemetry.
+          </div>
+          <div style={{ marginTop: "12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>
+              Isolated Twin Clone Engine
+            </span>
             <Link
               to="/sandbox"
               style={{
+                fontSize: "0.76rem",
+                fontWeight: 600,
+                color: "var(--sky-400)",
+                textDecoration: "none",
                 display: "inline-flex",
                 alignItems: "center",
-                justifyContent: "center",
-                padding: "8px",
-                borderRadius: "var(--radius-md)",
-                backgroundColor: "var(--bg-app)",
-                color: "var(--sky-400)",
-                border: "1px solid var(--border-default)",
-                textDecoration: "none",
+                gap: "4px",
               }}
-              aria-label="Navigate to Sandbox"
             >
-              <ArrowRight size={16} />
+              Launch Sandbox Scenarios <ArrowRight size={13} />
             </Link>
           </div>
         </Card>
