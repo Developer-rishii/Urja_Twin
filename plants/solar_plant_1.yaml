@@ -7,8 +7,8 @@ location: "India (Plant 1)"
 
 # Capacity and Ratings
 capacity_kw: 32000.0          # estimated_from_data: observed peak AC generation ~29.15 MW across 22 inverters; assumed DC STC capacity 32.0 MW
-p_stc_kw: 32000.0             # estimated_from_data: fixed to 32 MW DC STC capacity to allow PR identification
-gamma: -0.004                 # assumption: typical temperature coefficient for crystalline silicon (-0.4%/°C), datasheet not available
+p_stc_kw: 32000.0             # assumption: fixed to 32 MW DC STC capacity to allow PR identification
+gamma: -0.004                 # assumption: typical temperature coefficient for crystalline silicon (-0.4%/degC), datasheet not available
 
 # Calibrated Parameters
 performance_ratio: 0.9916     # calibrated: fitted on train period (first 75% of days, 2020-05-15 to 2020-06-08)
