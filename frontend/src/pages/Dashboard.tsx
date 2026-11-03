@@ -1,4 +1,14 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { Link } from "react-router-dom";
+import {
+  Zap,
+  Gauge,
+  Percent,
+  AlertOctagon,
+  RefreshCw,
+  TrendingUp,
+  ArrowRight,
+} from "lucide-react";
 import {
   getPlantState,
   getPlantForecast,
@@ -12,6 +22,9 @@ import {
 } from "../api/client";
 import { HeroChart, type ChartDataPoint } from "../components/dashboard/HeroChart";
 import { AccuracyCard } from "../components/dashboard/AccuracyCard";
+import { KpiCard } from "../components/common/KpiCard";
+import { Card } from "../components/common/Card";
+import { PageHeader } from "../components/common/PageHeader";
 import { LoadingSpinner } from "../components/common/LoadingSpinner";
 import { ErrorAlert } from "../components/common/ErrorAlert";
 
@@ -25,8 +38,11 @@ export const Dashboard: React.FC<{ plantId: string }> = ({ plantId }) => {
   const [lastSyncTime, setLastSyncTime] = useState<string>("");
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
+  // Ref to track initial load so polling updates do not re-trigger mount animations
+  const isInitialMount = useRef(true);
+
   const fetchDashboardData = useCallback(async (isInitial = false) => {
-    if (isInitial) setLoading(true);
+    if (isInitial && isInitialMount.current) setLoading(true);
     setIsRefreshing(true);
     setError(null);
 
@@ -46,7 +62,6 @@ export const Dashboard: React.FC<{ plantId: string }> = ({ plantId }) => {
       setAccuracy(accRes);
       setLastSyncTime(new Date().toLocaleTimeString());
 
-      // Map readings into unified 15-min chart timeline
       const capacityKw = stateRes.capacity_kw || 1000.0;
       const tolPct = dsmRes.tolerance_pct || 10.0;
       const tolKw = capacityKw * (tolPct / 100.0);
@@ -66,7 +81,6 @@ export const Dashboard: React.FC<{ plantId: string }> = ({ plantId }) => {
         breachMap.set(b.ts, b);
       });
 
-      // Assemble unified 96 points
       const points: ChartDataPoint[] = (forecastRes.forecast || []).map((f) => {
         const schedKw = schedMap.get(f.ts) ?? null;
         const actualKw = actualMap.has(f.ts) ? actualMap.get(f.ts)! : null;
@@ -91,17 +105,20 @@ export const Dashboard: React.FC<{ plantId: string }> = ({ plantId }) => {
     } catch (err: any) {
       setError(err?.response?.data?.detail || err.message || "Failed to load dashboard telemetry.");
     } finally {
-      if (isInitial) setLoading(false);
+      if (isInitial && isInitialMount.current) {
+        setLoading(false);
+        isInitialMount.current = false;
+      }
       setIsRefreshing(false);
     }
   }, [plantId]);
 
-  // Initial load
   useEffect(() => {
+    isInitialMount.current = true;
     fetchDashboardData(true);
   }, [fetchDashboardData]);
 
-  // Auto-refresh interval (5 seconds) to catch incoming simulator replay blocks
+  // Regular 5-second polling for real-time simulator blocks
   useEffect(() => {
     const interval = setInterval(() => {
       fetchDashboardData(false);
@@ -117,127 +134,91 @@ export const Dashboard: React.FC<{ plantId: string }> = ({ plantId }) => {
   const exposurePct = dsm?.relative_exposure_pct ?? 0;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-      {/* Top Sync & Status Bar */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          flexWrap: "wrap",
-          gap: "0.75rem",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <div
-            style={{
-              width: "10px",
-              height: "10px",
-              borderRadius: "50%",
-              backgroundColor: state?.node_status === "online" ? "#10B981" : "#EF4444",
-              boxShadow: state?.node_status === "online" ? "0 0 8px #10B981" : "none",
-            }}
-          />
-          <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "#F8FAFC" }}>
-            Node Status: {state?.node_status === "online" ? "ACTIVE STREAM" : "OFFLINE"}
-          </span>
-          {isRefreshing && (
-            <span style={{ fontSize: "0.75rem", color: "#38BDF8", fontWeight: 600 }}>
-              (syncing...)
+    <div className="animate-fade-in" style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+      {/* SaaS Page Header */}
+      <PageHeader
+        title="Generation & Dispatch Compliance"
+        subtitle="15-minute resolution LightGBM forecast, continuous physics twin synchronization, and DSM penalty mitigation."
+        actions={
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
+              Last sync: <strong style={{ color: "var(--text-secondary)" }}>{lastSyncTime || "Just now"}</strong>
             </span>
-          )}
-        </div>
+            <button
+              onClick={() => fetchDashboardData(false)}
+              aria-label="Refresh telemetry data"
+              style={{
+                backgroundColor: "var(--bg-surface-elevated)",
+                color: "var(--sky-400)",
+                border: "1px solid var(--border-default)",
+                borderRadius: "var(--radius-sm)",
+                padding: "6px 12px",
+                fontSize: "0.78rem",
+                fontWeight: 600,
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+              }}
+            >
+              <RefreshCw size={13} className={isRefreshing ? "spin-icon" : ""} />
+              <span>Sync</span>
+            </button>
+          </div>
+        }
+      />
 
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <span style={{ fontSize: "0.8rem", color: "#94A3B8" }}>
-            Last Twin Sync: <strong>{lastSyncTime || "Just now"}</strong>
-          </span>
-          <button
-            onClick={() => fetchDashboardData(false)}
-            style={{
-              backgroundColor: "#1E293B",
-              color: "#38BDF8",
-              border: "1px solid #334155",
-              borderRadius: "6px",
-              padding: "4px 10px",
-              fontSize: "0.75rem",
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            ↻ Manual Sync
-          </button>
-        </div>
-      </div>
-
-      {/* Hero KPI Cards Row */}
+      {/* 4 Hero KPI Cards */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
           gap: "1rem",
         }}
       >
-        <div style={kpiCardStyle}>
-          <div style={kpiLabelStyle}>ACTUAL INGESTED POWER</div>
-          <div style={kpiValueStyle}>{state?.actual_kw.toLocaleString()} kW</div>
-          <div style={kpiSubStyle}>Latest timestamp: {state?.last_ts || "N/A"}</div>
-        </div>
+        <KpiCard
+          label="Actual Generation"
+          value={`${state?.actual_kw.toLocaleString()} kW`}
+          subValue={`Latest timestamp: ${state?.last_ts || "Awaiting packet"}`}
+          icon={<Zap size={18} />}
+          status="default"
+          badge={state?.node_status === "online" ? "STREAM ACTIVE" : "OFFLINE"}
+          tooltip="Real telemetry reading ingested from simulated sensor node via MQTT"
+        />
 
-        <div style={kpiCardStyle}>
-          <div style={kpiLabelStyle}>PHYSICS TWIN EXPECTED</div>
-          <div style={kpiValueStyle}>{state?.expected_kw.toLocaleString()} kW</div>
-          <div style={kpiSubStyle}>
-            {state?.plant_type === "solar_pv" ? "PV cell temp & irradiance model" : "Wind cubic power equation"}
-          </div>
-        </div>
+        <KpiCard
+          label="Physics Twin Expected"
+          value={`${state?.expected_kw.toLocaleString()} kW`}
+          subValue={state?.plant_type === "solar_pv" ? "PV cell temp & irradiance model" : "SCADA aerodynamic cubic equation"}
+          icon={<Gauge size={18} />}
+          status="default"
+          badge="PHYSICS"
+          tooltip="Instantaneous thermodynamic power equation output"
+        />
 
-        <div style={kpiCardStyle}>
-          <div style={kpiLabelStyle}>TWIN SYNC GAP</div>
-          <div
-            style={{
-              ...kpiValueStyle,
-              color: Math.abs(gapPct) > 10 ? "#EF4444" : "#10B981",
-            }}
-          >
-            {gapPct > 0 ? `+${gapPct}%` : `${gapPct}%`}
-          </div>
-          <div style={kpiSubStyle}>
-            {Math.abs(gapPct) > 10 ? "⚠ Discrepancy beyond ±10% threshold" : "✓ Tracking expected physics"}
-          </div>
-        </div>
+        <KpiCard
+          label="Twin Sync Gap"
+          value={gapPct > 0 ? `+${gapPct}%` : `${gapPct}%`}
+          subValue={Math.abs(gapPct) > 10 ? "Exceeds ±10% physical threshold" : "Tracking expected physics"}
+          icon={<Percent size={18} />}
+          status={Math.abs(gapPct) > 10 ? "amber" : "emerald"}
+          badge={Math.abs(gapPct) > 10 ? "DIVERGENT" : "CALIBRATED"}
+          tooltip="Discrepancy between actual sensor output and physics model"
+        />
 
-        <div
-          style={{
-            ...kpiCardStyle,
-            borderColor: breachesCount > 0 ? "#EF4444" : "#1E293B",
-            backgroundColor: breachesCount > 0 ? "#1C1420" : "#131C31",
-          }}
-        >
-          <div style={kpiLabelStyle}>DSM BREACH BLOCKS (24H)</div>
-          <div
-            style={{
-              ...kpiValueStyle,
-              color: breachesCount > 0 ? "#EF4444" : "#10B981",
-            }}
-          >
-            {breachesCount} Blocks
-          </div>
-          <div style={kpiSubStyle}>
-            Penalty Exposure: {exposurePct.toFixed(1)}% | Band: ±{dsm?.tolerance_pct || 10}%
-          </div>
-        </div>
+        <KpiCard
+          label="DSM Breach Blocks (24h)"
+          value={`${breachesCount} Blocks`}
+          subValue={`Penalty exposure: ${exposurePct.toFixed(1)}% | Band: ±${dsm?.tolerance_pct || 10}%`}
+          icon={<AlertOctagon size={18} />}
+          status={breachesCount > 0 ? "breach" : "emerald"}
+          badge={breachesCount > 0 ? "ACTION REQ" : "COMPLIANT"}
+          tooltip="Blocks deviating beyond CERC tolerance band relative to committed schedule"
+        />
       </div>
 
       {/* Hero Chart Section */}
-      <div
-        style={{
-          backgroundColor: "#131C31",
-          borderRadius: "10px",
-          border: "1px solid #1E293B",
-          padding: "1.5rem",
-        }}
-      >
+      <Card variant="default" padding="md">
         <div
           style={{
             display: "flex",
@@ -249,11 +230,14 @@ export const Dashboard: React.FC<{ plantId: string }> = ({ plantId }) => {
           }}
         >
           <div>
-            <h2 style={{ fontSize: "1.1rem", fontWeight: 700, margin: 0, color: "#F8FAFC" }}>
-              24-Hour Horizon Power Dispatch & DSM Bands
-            </h2>
-            <p style={{ fontSize: "0.8rem", color: "#94A3B8", margin: "4px 0 0 0" }}>
-              15-minute resolution LightGBM forecast vs Scheduled commitments & DSM tolerance band
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <TrendingUp size={18} color="var(--sky-400)" />
+              <h2 style={{ fontSize: "1.1rem", fontWeight: 800, margin: 0, color: "var(--text-primary)" }}>
+                24-Hour Horizon Dispatch & DSM Band Analysis
+              </h2>
+            </div>
+            <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", margin: "4px 0 0 0" }}>
+              15-minute resolution LightGBM forecast vs Committed Schedule with CERC ±{dsm?.tolerance_pct || 10}% tolerance zone
             </p>
           </div>
 
@@ -261,28 +245,32 @@ export const Dashboard: React.FC<{ plantId: string }> = ({ plantId }) => {
             {breachesCount > 0 && (
               <span
                 style={{
-                  backgroundColor: "#7F1D1D",
-                  color: "#FCA5A5",
+                  backgroundColor: "var(--breach-red-bg)",
+                  color: "var(--breach-red)",
+                  border: "1px solid var(--breach-red-border)",
                   padding: "4px 10px",
-                  borderRadius: "9999px",
+                  borderRadius: "var(--radius-full)",
                   fontSize: "0.75rem",
                   fontWeight: 700,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
                 }}
               >
-                ⚠ {breachesCount} DSM Breaches Detected
+                ⚠ {breachesCount} Breaches Active
               </span>
             )}
             <span
               style={{
                 fontSize: "0.75rem",
-                color: "#94A3B8",
-                backgroundColor: "#0F172A",
-                padding: "4px 8px",
-                borderRadius: "4px",
-                border: "1px solid #334155",
+                color: "var(--text-secondary)",
+                backgroundColor: "var(--bg-app)",
+                padding: "4px 10px",
+                borderRadius: "var(--radius-sm)",
+                border: "1px solid var(--border-subtle)",
               }}
             >
-              Capacity: {state?.capacity_kw.toLocaleString()} kW
+              Capacity: <strong>{state?.capacity_kw.toLocaleString()} kW</strong>
             </span>
           </div>
         </div>
@@ -292,38 +280,85 @@ export const Dashboard: React.FC<{ plantId: string }> = ({ plantId }) => {
           capacityKw={state?.capacity_kw || 1000.0}
           tolerancePct={dsm?.tolerance_pct || 10.0}
         />
+      </Card>
+
+      {/* Quick Navigation Cards linking to Existing Functional Pages */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+          gap: "1rem",
+        }}
+      >
+        <Card variant="elevated" padding="md">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--amber-400)", textTransform: "uppercase" }}>
+                Active Alerts & Schedule Revisions
+              </div>
+              <div style={{ fontSize: "0.95rem", fontWeight: 700, marginTop: "4px", color: "var(--text-primary)" }}>
+                {breachesCount > 0 ? `${breachesCount} DSM Breaches Detected` : "All Schedule Bands Compliant"}
+              </div>
+              <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "2px" }}>
+                View suggested zero-breach revised schedules & soiling status
+              </div>
+            </div>
+            <Link
+              to="/alerts"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "8px",
+                borderRadius: "var(--radius-md)",
+                backgroundColor: "var(--bg-app)",
+                color: "var(--sky-400)",
+                border: "1px solid var(--border-default)",
+                textDecoration: "none",
+              }}
+              aria-label="Navigate to Alerts & DSM"
+            >
+              <ArrowRight size={16} />
+            </Link>
+          </div>
+        </Card>
+
+        <Card variant="elevated" padding="md">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--sky-400)", textTransform: "uppercase" }}>
+                What-If Sandbox Scenarios
+              </div>
+              <div style={{ fontSize: "0.95rem", fontWeight: 700, marginTop: "4px", color: "var(--text-primary)" }}>
+                BESS Battery Storage & Panel Washing
+              </div>
+              <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "2px" }}>
+                Simulate corrective dispatch on an isolated twin clone
+              </div>
+            </div>
+            <Link
+              to="/sandbox"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "8px",
+                borderRadius: "var(--radius-md)",
+                backgroundColor: "var(--bg-app)",
+                color: "var(--sky-400)",
+                border: "1px solid var(--border-default)",
+                textDecoration: "none",
+              }}
+              aria-label="Navigate to Sandbox"
+            >
+              <ArrowRight size={16} />
+            </Link>
+          </div>
+        </Card>
       </div>
 
       {/* Measured Accuracy Benchmark Card */}
       <AccuracyCard accuracy={accuracy} />
     </div>
   );
-};
-
-const kpiCardStyle: React.CSSProperties = {
-  backgroundColor: "#131C31",
-  border: "1px solid #1E293B",
-  borderRadius: "10px",
-  padding: "1.25rem",
-};
-
-const kpiLabelStyle: React.CSSProperties = {
-  fontSize: "0.72rem",
-  fontWeight: 700,
-  color: "#94A3B8",
-  letterSpacing: "0.05em",
-  marginBottom: "0.4rem",
-};
-
-const kpiValueStyle: React.CSSProperties = {
-  fontSize: "1.65rem",
-  fontWeight: 800,
-  color: "#F8FAFC",
-  letterSpacing: "-0.025em",
-  marginBottom: "0.25rem",
-};
-
-const kpiSubStyle: React.CSSProperties = {
-  fontSize: "0.72rem",
-  color: "#64748B",
 };

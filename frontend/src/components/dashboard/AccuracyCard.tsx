@@ -1,12 +1,7 @@
-/**
- * Accuracy Benchmark Card complying with SIH Jury Honesty Guidelines:
- * - Compares Persistence MAE, Yesterday MAE, and Physics-only baseline vs Our Model MAE
- * - Explicitly lists Dataset Name & strict time-based test split
- * - States Future-Weather Proxy caveat upfront
- */
-
 import React from "react";
 import { type AccuracyResponse } from "../../api/client";
+import { Card } from "../common/Card";
+import { Award, CheckCircle, HelpCircle } from "lucide-react";
 
 interface AccuracyCardProps {
   accuracy: AccuracyResponse | null;
@@ -23,36 +18,37 @@ export const AccuracyCard: React.FC<AccuracyCardProps> = ({ accuracy }) => {
       : "Kaggle Wind Turbine SCADA Dataset (10-min resampled)";
 
   return (
-    <div
-      style={{
-        backgroundColor: "#131C31",
-        borderRadius: "10px",
-        border: "1px solid #1E293B",
-        padding: "1.25rem 1.5rem",
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.5rem" }}>
+    <Card variant="elevated" padding="md">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.75rem" }}>
         <div>
-          <h3 style={{ fontSize: "1rem", fontWeight: 700, margin: 0, color: "#F8FAFC" }}>
-            Model Accuracy Benchmark: {selected_model}
-          </h3>
-          <p style={{ fontSize: "0.75rem", color: "#94A3B8", margin: "2px 0 0 0" }}>
-            Dataset: <strong>{datasetName}</strong> | Strict time-based test split (Test start: {split_date})
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <Award size={18} color="var(--sky-400)" />
+            <h3 style={{ fontSize: "1.05rem", fontWeight: 800, margin: 0, color: "var(--text-primary)" }}>
+              Model Accuracy Benchmark: {selected_model}
+            </h3>
+          </div>
+          <p style={{ fontSize: "0.78rem", color: "var(--text-secondary)", margin: "4px 0 0 0" }}>
+            Dataset: <strong>{datasetName}</strong> | Strict chronological test split (Cut-off date: {split_date})
           </p>
         </div>
 
-        <span
+        <div
           style={{
-            fontSize: "0.7rem",
-            backgroundColor: "#065F46",
-            color: "#6EE7B7",
-            padding: "3px 8px",
-            borderRadius: "4px",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "5px",
+            fontSize: "0.75rem",
+            backgroundColor: "var(--emerald-bg)",
+            color: "var(--emerald-400)",
+            padding: "4px 10px",
+            borderRadius: "var(--radius-full)",
             fontWeight: 700,
+            border: "1px solid var(--emerald-border)",
           }}
         >
+          <CheckCircle size={14} />
           +{test_metrics.improvement_vs_best_baseline_pct?.toFixed(1)}% vs Best Baseline
-        </span>
+        </div>
       </div>
 
       {/* Metrics Row */}
@@ -61,12 +57,12 @@ export const AccuracyCard: React.FC<AccuracyCardProps> = ({ accuracy }) => {
           display: "grid",
           gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
           gap: "0.75rem",
-          marginTop: "1rem",
+          marginTop: "1.25rem",
         }}
       >
-        <div style={boxStyle}>
+        <div style={metricBox}>
           <div style={metricTitle}>OUR MODEL MAE (PROXY)</div>
-          <div style={{ ...metricVal, color: "#38BDF8" }}>
+          <div style={{ ...metricVal, color: "var(--sky-400)" }}>
             {test_metrics.our_model_proxy_mae_kw?.toFixed(1)} kW
           </div>
           <div style={metricSub}>
@@ -74,21 +70,21 @@ export const AccuracyCard: React.FC<AccuracyCardProps> = ({ accuracy }) => {
           </div>
         </div>
 
-        <div style={boxStyle}>
+        <div style={metricBox}>
           <div style={metricTitle}>PERSISTENCE BASELINE</div>
           <div style={metricVal}>{test_metrics.persistence_mae_kw?.toFixed(1)} kW</div>
           <div style={metricSub}>Naïve lag t carry-forward</div>
         </div>
 
-        <div style={boxStyle}>
+        <div style={metricBox}>
           <div style={metricTitle}>PHYSICS ONLY (NO ML)</div>
           <div style={metricVal}>{test_metrics.physics_only_mae_kw?.toFixed(1)} kW</div>
           <div style={metricSub}>Pure PV / Wind equation</div>
         </div>
 
-        <div style={boxStyle}>
+        <div style={metricBox}>
           <div style={metricTitle}>NO-FUTURE-WEATHER VARIANT</div>
-          <div style={{ ...metricVal, color: "#F59E0B" }}>
+          <div style={{ ...metricVal, color: "var(--amber-400)" }}>
             {test_metrics.no_future_weather_mae_kw?.toFixed(1)} kW
           </div>
           <div style={metricSub}>Lags + hour sin/cos only</div>
@@ -98,44 +94,52 @@ export const AccuracyCard: React.FC<AccuracyCardProps> = ({ accuracy }) => {
       {/* Transparency Note */}
       <div
         style={{
-          marginTop: "0.85rem",
-          padding: "8px 12px",
-          backgroundColor: "#0F172A",
-          borderRadius: "6px",
-          borderLeft: "3px solid #38BDF8",
-          fontSize: "0.75rem",
-          color: "#CBD5E1",
+          marginTop: "1rem",
+          padding: "10px 14px",
+          backgroundColor: "var(--bg-app)",
+          borderRadius: "var(--radius-sm)",
+          borderLeft: "3px solid var(--sky-400)",
+          fontSize: "0.76rem",
+          color: "var(--text-secondary)",
+          display: "flex",
+          gap: "8px",
+          alignItems: "flex-start",
         }}
       >
-        <strong>Jury Transparency Note: </strong>
-        {caveat} (Tested with ±10% and ±20% synthetic weather noise in `ml/results.md`).
+        <HelpCircle size={15} style={{ flexShrink: 0, marginTop: "2px", color: "var(--sky-400)" }} />
+        <div>
+          <strong style={{ color: "var(--text-primary)" }}>Jury Transparency Note: </strong>
+          {caveat} (Tested with ±10% and ±20% synthetic weather noise in `ml/results.md`).
+        </div>
       </div>
-    </div>
+    </Card>
   );
 };
 
-const boxStyle: React.CSSProperties = {
-  backgroundColor: "#0F172A",
-  padding: "0.75rem 1rem",
-  borderRadius: "6px",
-  border: "1px solid #1E293B",
+const metricBox: React.CSSProperties = {
+  backgroundColor: "var(--bg-app)",
+  padding: "0.85rem 1rem",
+  borderRadius: "var(--radius-md)",
+  border: "1px solid var(--border-subtle)",
 };
 
 const metricTitle: React.CSSProperties = {
   fontSize: "0.68rem",
   fontWeight: 700,
-  color: "#94A3B8",
-  marginBottom: "0.25rem",
+  color: "var(--text-muted)",
+  marginBottom: "0.3rem",
+  letterSpacing: "0.04em",
 };
 
 const metricVal: React.CSSProperties = {
-  fontSize: "1.25rem",
+  fontSize: "1.35rem",
   fontWeight: 800,
-  color: "#F8FAFC",
+  letterSpacing: "-0.02em",
+  color: "var(--text-primary)",
 };
 
 const metricSub: React.CSSProperties = {
-  fontSize: "0.68rem",
-  color: "#64748B",
-  marginTop: "0.2rem",
+  fontSize: "0.7rem",
+  color: "var(--text-muted)",
+  marginTop: "0.25rem",
 };
