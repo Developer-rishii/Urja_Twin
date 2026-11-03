@@ -6,10 +6,10 @@ plant_type: wind_turbine
 location: "Turkey (SCADA T1)"
 
 # Ratings and Dimensions
-capacity_kw: 3600.0           # estimated_from_data: observed peak power ~3618 kW, rated at 3.6 MW (Senvion 3.4M/3.6M class)
+capacity_kw: 3600.0           # estimated_from_data: observed peak power ~3618 kW, rated at 3.6 MW class
 p_rated_kw: 3600.0            # estimated_from_data: clipped turbine generator rated active power
-rotor_diameter_m: 114.0       # estimated_from_data: typical rotor diameter for 3.6 MW class turbine
-rotor_area_m2: 10207.03       # calculated: pi * (114/2)^2 = 10207.03 m^2
+rotor_diameter_m: 114.0       # assumption: typical rotor diameter for 3.6 MW class turbine
+rotor_area_m2: 10207.03       # assumption: calculated from assumed diameter pi * (114/2)^2 = 10207.03 m^2
 
 # Atmospheric and Elevation Assumptions
 air_density_kg_m3: 1.225      # assumption: standard sea-level air density (dataset has no ambient pressure or temperature)
@@ -20,7 +20,7 @@ wind_shear_alpha: 0.14        # assumption: standard power-law shear exponent (n
 # Operational Speed Limits
 v_cut_in_mps: 3.0             # estimated_from_data: observed power takeoff ~3.0 m/s
 v_rated_mps: 13.0             # estimated_from_data: speed at which power saturates near 3600 kW
-v_cut_out_mps: 25.0           # estimated_from_data: standard IEC class cut-out speed ~25 m/s
+v_cut_out_mps: 25.0           # assumption: standard IEC class cut-out speed ~25 m/s
 
 # Calibrated Aerodynamic Efficiency
 cp: 0.3313                    # calibrated: power coefficient fitted on train period (first 75% of days, 2018-01-01 to 2018-09-30)
