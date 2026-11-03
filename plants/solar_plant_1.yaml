@@ -1,0 +1,24 @@
+# Solar Plant 1 Parameters
+# Generated for UrjaTwin Physics Twin
+
+plant_id: solar_plant_1
+plant_type: solar_pv
+location: "India (Plant 1)"
+
+# Capacity and Ratings
+capacity_kw: 32000.0          # estimated_from_data: observed peak AC generation ~29.15 MW across 22 inverters; assumed DC STC capacity 32.0 MW
+p_stc_kw: 32000.0             # estimated_from_data: fixed to 32 MW DC STC capacity to allow PR identification
+gamma: -0.004                 # assumption: typical temperature coefficient for crystalline silicon (-0.4%/°C), datasheet not available
+
+# Calibrated Parameters
+performance_ratio: 0.9916     # calibrated: fitted on train period (first 75% of days, 2020-05-15 to 2020-06-08)
+soiling_loss: 0.0             # dynamic/configurable: baseline clean panels (L_soil = 0.0)
+
+# Train/Test Split Record
+train_period: "2020-05-15 to 2020-06-08"
+test_period: "2020-06-09 to 2020-06-17"
+split_date: "2020-06-09"
+
+# Regulations & Ingestion
+irradiance_input_unit: "kW/m2" # data_notes: Kaggle Plant 1 sensor gives irradiation with peak ~1.22 kW/m2. Physics equation converts to W/m2 internally.
+dsm_tolerance_pct: 10.0       # config_default: from DSM_TOLERANCE_PCT (default 10% tolerance band per CERC guidelines)
