@@ -4,14 +4,18 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.storage import init_indexes
+from app.mqtt_client import start_mqtt, stop_mqtt
 from app.api.routes_plants import router as plants_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Initialize MongoDB collection indexes
+    # Startup: Initialize MongoDB collection indexes and MQTT subscriber
     init_indexes()
+    start_mqtt()
     yield
+    # Shutdown
+    stop_mqtt()
 
 
 app = FastAPI(
