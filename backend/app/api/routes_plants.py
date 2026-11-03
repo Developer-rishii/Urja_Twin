@@ -26,6 +26,8 @@ from app import storage
 from app.twin.physics import calculate_solar_power, calculate_wind_power
 from app.forecast.service import forecast as run_forecast
 from app.dsm.engine import check, revise, default_schedule
+from app.sandbox.scenarios import simulate_scenario
+from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/plants", tags=["Plants"])
 
@@ -351,4 +353,67 @@ def get_plant_alerts(
         "count": len(alerts),
         "alerts": alerts,
         "message": f"Retrieved {len(alerts)} alerts." if alerts else "No alerts found.",
+    }
+
+
+class SimulateRequest(BaseModel):
+    scenario: str = Field(..., description="clean_panels | add_battery | add_capacity | monsoon_cloud")
+    params: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Scenario parameters")
+    issue_time: Optional[str] = Field(None, description="Optional forecast issue time ISO string")
+
+
+@router.post("/{plant_id}/simulate")
+def simulate_plant_scenario(plant_id: str, request: SimulateRequest):
+    """Run what-if sandbox simulation on a detached copy of digital twin state.
+
+    Guarantees:
+    - Never mutates plant twin state, database collections, or live telemetry.
+    - Supported scenarios: clean_panels, add_battery, add_capacity, monsoon_cloud.
+    """
+    cfg = _load_plant_config(plant_id)
+
+    # 1. Obtain baseline 96-block forecast (from DB or ML forecaster)
+    issue_time = request.issue_time
+    blocks = None
+    if not issue_time:
+        latest = storage.get_latest_reading(plant_id)
+        if latest and "ts" in latest:
+            issue_time = latest["ts"]
+        else:
+            issue_time = "2020-06-10T12:00:00" if cfg.get("plant_type") == "solar_pv" else "2018-10-15T06:00:00"
+
+    try:
+        blocks = run_forecast(plant_id, issue_time=issue_time)
+    except Exception:
+        blocks = None
+
+    if not blocks:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No baseline forecast available for plant '{plant_id}' to run sandbox simulation.",
+        )
+
+    # 2. Get current twin state to read active soiling estimate (for solar)
+    twin_state = storage.get_twin_state(plant_id) or {}
+    current_soiling_pct = twin_state.get("soiling_loss_pct", None)
+
+    # 3. Run sandbox simulation on a deepcopy inside simulate_scenario
+    try:
+        sim_result = simulate_scenario(
+            plant_config=cfg,
+            base_forecast_blocks=blocks,
+            scenario=request.scenario,
+            params=request.params,
+            tolerance_pct=settings.DSM_TOLERANCE_PCT,
+            current_soiling_pct=current_soiling_pct,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Simulation failed: {str(e)}")
+
+    return {
+        "source": settings.DATA_SOURCE_LABEL,
+        "simulation": sim_result,
+        "message": "Sandbox simulation completed successfully on isolated twin copy.",
     }
