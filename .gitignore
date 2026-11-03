@@ -1,0 +1,14 @@
+.env
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+node_modules/
+data/raw/*
+!data/raw/.gitkeep
+*.pkl
+!*.gitkeep
+.venv/
+dist/
+.DS_Store
+
