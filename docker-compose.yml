@@ -37,6 +37,7 @@ services:
       - ./plants:/app/plants:ro
       - ./data:/app/data:ro
       - ./ml:/app/ml
+      - ./simulator:/app/simulator:ro
     env_file:
       - .env
     depends_on:
@@ -50,6 +51,18 @@ services:
       timeout: 5s
       retries: 5
       start_period: 5s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: urjatwin-frontend
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    depends_on:
+      backend:
+        condition: service_healthy
 
 volumes:
   mongo_data:
