@@ -146,7 +146,7 @@ export const AlertsPage: React.FC<{ plantId: string }> = ({ plantId }) => {
             {dsm?.total_breaches || 0} Breaches
           </div>
           <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-            Tolerance Band: ±{dsm?.tolerance_pct || 10}% | Relative Exposure: {dsm?.relative_exposure_pct.toFixed(1)}%
+            Tolerance Band: ±{dsm?.tolerance_pct || 10}% | Relative Exposure: {dsm?.relative_exposure_pct !== undefined ? dsm.relative_exposure_pct.toFixed(1) : "0.0"}%
           </div>
         </Card>
 

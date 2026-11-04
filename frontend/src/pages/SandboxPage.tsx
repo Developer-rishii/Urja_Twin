@@ -142,7 +142,7 @@ export const SandboxPage: React.FC<{ plantId: string }> = ({ plantId }) => {
                 Edge Telemetry Node Health: {isOnline ? "ONLINE (Active MQTT Replay)" : "OFFLINE (Telemetry Interrupted)"}
               </div>
               <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
-                Last Seen: {plantState?.last_ts || "No telemetry received"} | Power: {plantState?.actual_kw.toLocaleString()} kW
+                Last Seen: {plantState?.last_ts || "No telemetry received"} | Power: {plantState?.actual_kw !== undefined ? plantState.actual_kw.toLocaleString() : "--"} kW
                 {latestTelemetry && isSolar && ` | Irradiance: ${latestTelemetry.irradiance ?? 0} W/m² | Temp: ${latestTelemetry.module_temp ?? 0}°C`}
                 {latestTelemetry && !isSolar && ` | Wind Speed: ${latestTelemetry.wind_speed ?? 0} m/s`}
               </div>
