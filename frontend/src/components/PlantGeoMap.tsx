@@ -163,7 +163,7 @@ export const PlantGeoMap: React.FC<PlantGeoMapProps> = ({
     const cartoKey = import.meta.env.VITE_CARTO_API_KEY;
     const tileUrl = cartoKey
       ? `https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?api_key=${cartoKey}`
-      : "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}";
+      : "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 
     const tileAttrib = cartoKey
       ? '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener noreferrer">CARTO</a>'
