@@ -147,3 +147,69 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
 }
+
+/* Leaflet Dark Theme Overrides & SVG Pin Pulse */
+.leaflet-container {
+  background-color: var(--bg-app) !important;
+  font-family: var(--font-sans) !important;
+}
+
+.leaflet-popup-content-wrapper {
+  background-color: var(--bg-surface-elevated) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border-default) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--shadow-lg) !important;
+  padding: 4px !important;
+}
+
+.leaflet-popup-tip {
+  background-color: var(--bg-surface-elevated) !important;
+  border: 1px solid var(--border-default) !important;
+}
+
+.leaflet-control-attribution {
+  background: rgba(8, 11, 17, 0.75) !important;
+  color: var(--text-muted) !important;
+  font-size: 9px !important;
+}
+
+.leaflet-control-attribution a {
+  color: var(--text-secondary) !important;
+}
+
+.leaflet-control-zoom a {
+  background-color: var(--bg-surface-elevated) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-subtle) !important;
+}
+
+.leaflet-control-zoom a:hover {
+  background-color: var(--bg-surface-hover) !important;
+  color: var(--cyan-400) !important;
+}
+
+@keyframes markerSoftPulse {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.6);
+    opacity: 0.2;
+  }
+  100% {
+    transform: scale(0.9);
+    opacity: 0.8;
+  }
+}
+
+.urja-marker-pulse {
+  animation: markerSoftPulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .urja-marker-pulse {
+    animation: none !important;
+  }
+}

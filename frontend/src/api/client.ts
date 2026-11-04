@@ -31,6 +31,11 @@ export interface PlantSummary {
   location: string;
   capacity_kw: number;
   dsm_tolerance_pct: number;
+  latitude?: number;
+  longitude?: number;
+  zoom?: number;
+  location_label?: string;
+  location_basis?: string;
 }
 
 export interface PlantListResponse {
