@@ -4,6 +4,11 @@
 plant_id: wind_plant_1
 plant_type: wind_turbine
 location: "Turkey (SCADA T1)"
+latitude: 39.0
+longitude: 35.2
+zoom: 6
+location_label: "Turkey (SCADA T1)"
+location_basis: assumption # country-level, dataset gives no coordinates; replace if real site known
 
 # Ratings and Dimensions
 capacity_kw: 3600.0           # estimated_from_data: observed peak power ~3618 kW, rated at 3.6 MW class

@@ -4,6 +4,11 @@
 plant_id: solar_plant_1
 plant_type: solar_pv
 location: "India (Plant 1)"
+latitude: 22.0
+longitude: 79.0
+zoom: 5
+location_label: "India (Plant 1)"
+location_basis: assumption # country-level, dataset gives no coordinates; replace if real site known
 
 # Capacity and Ratings
 capacity_kw: 32000.0          # estimated_from_data: observed peak AC generation ~29.15 MW across 22 inverters; assumed DC STC capacity 32.0 MW

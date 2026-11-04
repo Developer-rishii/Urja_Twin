@@ -154,7 +154,11 @@ export const Layout: React.FC<LayoutProps> = ({
             </div>
           )}
           <button
-            onClick={() => setCollapsed(!collapsed)}
+            onClick={() => {
+              const nextState = !collapsed;
+              setCollapsed(nextState);
+              setTimeout(() => window.dispatchEvent(new Event("layout-sidebar-toggle")), 250);
+            }}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             style={{
               background: "none",

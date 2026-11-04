@@ -57,6 +57,11 @@ def list_plants():
                         "location": cfg.get("location"),
                         "capacity_kw": cfg.get("capacity_kw"),
                         "dsm_tolerance_pct": settings.DSM_TOLERANCE_PCT,
+                        "latitude": cfg.get("latitude"),
+                        "longitude": cfg.get("longitude"),
+                        "zoom": cfg.get("zoom"),
+                        "location_label": cfg.get("location_label"),
+                        "location_basis": cfg.get("location_basis"),
                     })
             except Exception:
                 continue

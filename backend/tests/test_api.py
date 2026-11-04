@@ -43,6 +43,17 @@ def test_list_plants():
     assert "solar_plant_1" in plant_ids
     assert "wind_plant_1" in plant_ids
 
+    # Validate additive location fields
+    solar_plant = next(p for p in data["plants"] if p["plant_id"] == "solar_plant_1")
+    assert "latitude" in solar_plant and solar_plant["latitude"] == 22.0
+    assert "longitude" in solar_plant and solar_plant["longitude"] == 79.0
+    assert solar_plant.get("location_basis") == "assumption"
+
+    wind_plant = next(p for p in data["plants"] if p["plant_id"] == "wind_plant_1")
+    assert "latitude" in wind_plant and wind_plant["latitude"] == 39.0
+    assert "longitude" in wind_plant and wind_plant["longitude"] == 35.2
+    assert wind_plant.get("location_basis") == "assumption"
+
 
 def test_plant_state_empty_and_valid():
     # Valid plant

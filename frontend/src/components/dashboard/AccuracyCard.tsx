@@ -8,9 +8,17 @@ interface AccuracyCardProps {
 }
 
 export const AccuracyCard: React.FC<AccuracyCardProps> = ({ accuracy }) => {
-  if (!accuracy) return null;
+  // Gracefully handle either null response, or direct/nested accuracy payload
+  const accData = (accuracy as any)?.accuracy || accuracy;
+  if (!accData || !accData.test_metrics) return null;
 
-  const { plant_type, selected_model, split_date, test_metrics, caveat } = accuracy.accuracy;
+  const {
+    plant_type = "solar_pv",
+    selected_model = "Benchmark Forecaster",
+    split_date = "N/A",
+    test_metrics = {},
+    caveat = "Benchmark evaluation against historical test telemetry.",
+  } = accData;
 
   const datasetName =
     plant_type === "solar_pv"

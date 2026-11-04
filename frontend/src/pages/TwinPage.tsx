@@ -2,9 +2,12 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   getPlantState,
   getPlantActual,
+  getPlants,
   type PlantStateResponse,
   type ActualBlock,
+  type PlantSummary,
 } from "../api/client";
+import { PlantGeoMap } from "../components/PlantGeoMap";
 import { LoadingSpinner } from "../components/common/LoadingSpinner";
 import { ErrorAlert } from "../components/common/ErrorAlert";
 import { PageHeader } from "../components/common/PageHeader";
@@ -15,6 +18,7 @@ import { Cpu, Zap, Activity, CheckCircle } from "lucide-react";
 export const TwinPage: React.FC<{ plantId: string }> = ({ plantId }) => {
   const [state, setState] = useState<PlantStateResponse | null>(null);
   const [recentReadings, setRecentReadings] = useState<ActualBlock[]>([]);
+  const [plantMeta, setPlantMeta] = useState<PlantSummary | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [lastSyncTime, setLastSyncTime] = useState<string>("");
@@ -25,12 +29,15 @@ export const TwinPage: React.FC<{ plantId: string }> = ({ plantId }) => {
     if (isInitial && isInitialMount.current) setLoading(true);
     setError(null);
     try {
-      const [stateRes, actualRes] = await Promise.all([
+      const [stateRes, actualRes, plantsRes] = await Promise.all([
         getPlantState(plantId),
         getPlantActual(plantId, 24),
+        getPlants(),
       ]);
       setState(stateRes);
       setRecentReadings(actualRes.actual || []);
+      const matched = plantsRes.plants.find((p) => p.plant_id === plantId) || null;
+      setPlantMeta(matched);
       setLastSyncTime(new Date().toLocaleTimeString());
     } catch (err: any) {
       setError(err?.response?.data?.detail || err.message || "Failed to load twin state");
@@ -219,6 +226,19 @@ export const TwinPage: React.FC<{ plantId: string }> = ({ plantId }) => {
           )}
         </div>
       </Card>
+
+      {/* Plant GIS Location & Micro-Climate Map */}
+      <PlantGeoMap
+        plantId={plantId}
+        plantState={state}
+        latitude={plantMeta?.latitude ?? (isSolar ? 22.0 : 39.0)}
+        longitude={plantMeta?.longitude ?? (isSolar ? 79.0 : 35.2)}
+        zoom={plantMeta?.zoom ?? (isSolar ? 5 : 6)}
+        locationLabel={plantMeta?.location_label || plantMeta?.location || (isSolar ? "India (Plant 1)" : "Turkey (SCADA T1)")}
+        locationBasis={plantMeta?.location_basis || "assumption"}
+        lastSyncTime={lastSyncTime}
+        height={380}
+      />
 
       {/* Recent Telemetry Table */}
       <Card variant="default" padding="md">
