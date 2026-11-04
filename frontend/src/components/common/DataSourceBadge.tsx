@@ -1,4 +1,5 @@
 import React from "react";
+import { Database, Radio } from "lucide-react";
 
 interface DataSourceBadgeProps {
   source?: string;
@@ -18,26 +19,23 @@ export const DataSourceBadge: React.FC<DataSourceBadgeProps> = ({
         alignItems: "center",
         gap: "6px",
         padding: "4px 10px",
-        borderRadius: "9999px",
-        fontSize: "0.75rem",
+        borderRadius: "var(--radius-full)",
+        fontSize: "0.72rem",
         fontWeight: 600,
-        letterSpacing: "0.025em",
-        backgroundColor: isSimulated ? "#FEF3C7" : "#E0F2FE",
-        color: isSimulated ? "#92400E" : "#0369A1",
-        border: `1px solid ${isSimulated ? "#FCD34D" : "#BAE6FD"}`,
+        letterSpacing: "0.02em",
+        backgroundColor: isSimulated ? "rgba(245, 158, 11, 0.12)" : "rgba(14, 165, 233, 0.12)",
+        color: isSimulated ? "var(--amber-400)" : "var(--sky-400)",
+        border: `1px solid ${isSimulated ? "rgba(245, 158, 11, 0.3)" : "rgba(14, 165, 233, 0.3)"}`,
       }}
       className={className}
       title="Data transparency tag complying with SIH Jury presentation honesty guidelines"
     >
-      <span
-        style={{
-          width: "6px",
-          height: "6px",
-          borderRadius: "50%",
-          backgroundColor: isSimulated ? "#D97706" : "#0284C7",
-        }}
-      />
-      Data Source: {isSimulated ? "Simulated Node (Replay)" : "Historical Replay"}
+      {isSimulated ? (
+        <Radio size={12} strokeWidth={2.5} style={{ animation: "pulse 2s infinite" }} />
+      ) : (
+        <Database size={12} strokeWidth={2.5} />
+      )}
+      <span>Data Source: <strong>{isSimulated ? "Simulated Node (Replay)" : "Historical Replay"}</strong></span>
     </div>
   );
 };

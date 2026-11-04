@@ -7,9 +7,11 @@
  * - Default committed schedule with shaded DSM tolerance band (±10%)
  * - Highlighted DSM breach blocks in prominent red
  * - Interactive tooltip showing deviation and compliance status
+ * - Toggleable Auto-Scale vs Full Plant Capacity view
+ * - Toggleable series visibility pills
  */
 
-import React from "react";
+import React, { useState, useMemo } from "react";
 import {
   ComposedChart,
   Line,
@@ -21,6 +23,7 @@ import {
   ResponsiveContainer,
   ReferenceDot,
 } from "recharts";
+import { Maximize2, Minimize2 } from "lucide-react";
 
 export interface ChartDataPoint {
   ts: string;
@@ -46,6 +49,24 @@ export const HeroChart: React.FC<HeroChartProps> = ({
   capacityKw,
   tolerancePct,
 }) => {
+  const [useCapacityScale, setUseCapacityScale] = useState<boolean>(false);
+  const [showForecast, setShowForecast] = useState<boolean>(true);
+  const [showSchedule, setShowSchedule] = useState<boolean>(true);
+  const [showActual, setShowActual] = useState<boolean>(true);
+  const [showToleranceBand, setShowToleranceBand] = useState<boolean>(true);
+
+  // Compute dynamic max value from active series to provide vivid, uncompressed view
+  const dynamicMax = useMemo(() => {
+    let max = 100;
+    data.forEach((d) => {
+      if (d.forecast_kw !== null && d.forecast_kw > max) max = d.forecast_kw;
+      if (d.schedule_kw !== null && d.schedule_kw > max) max = d.schedule_kw;
+      if (d.actual_kw !== null && d.actual_kw > max) max = d.actual_kw;
+      if (d.band_upper !== null && d.band_upper > max) max = d.band_upper;
+    });
+    return Math.ceil(max * 1.15); // 15% visual headroom
+  }, [data]);
+
   if (!data || data.length === 0) {
     return (
       <div
@@ -54,9 +75,10 @@ export const HeroChart: React.FC<HeroChartProps> = ({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: "#0F172A",
-          borderRadius: "8px",
-          color: "#64748B",
+          backgroundColor: "var(--bg-app)",
+          borderRadius: "var(--radius-md)",
+          color: "var(--text-muted)",
+          border: "1px dashed var(--border-default)",
         }}
       >
         No telemetry or forecast blocks available for plotting.
@@ -78,61 +100,65 @@ export const HeroChart: React.FC<HeroChartProps> = ({
       return (
         <div
           style={{
-            backgroundColor: "#0B0F19",
-            border: `1px solid ${item.isBreach ? "#EF4444" : "#334155"}`,
-            borderRadius: "8px",
+            backgroundColor: "rgba(11, 15, 25, 0.95)",
+            backdropFilter: "blur(12px)",
+            border: `1px solid ${item.isBreach ? "var(--breach-red)" : "var(--border-default)"}`,
+            borderRadius: "var(--radius-md)",
             padding: "10px 14px",
-            boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.5)",
+            boxShadow: item.isBreach ? "var(--breach-red-glow)" : "0 10px 25px -5px rgba(0, 0, 0, 0.5)",
             fontSize: "0.8rem",
-            color: "#F8FAFC",
-            minWidth: "220px",
+            color: "var(--text-primary)",
+            minWidth: "240px",
+            zIndex: 100,
           }}
         >
-          <div style={{ fontWeight: 700, borderBottom: "1px solid #1E293B", paddingBottom: "4px", marginBottom: "6px" }}>
+          <div style={{ fontWeight: 700, borderBottom: "1px solid var(--border-subtle)", paddingBottom: "4px", marginBottom: "6px" }}>
             ⏱ {item.ts}
           </div>
 
-          <div style={{ display: "flex", justifyContent: "space-between", margin: "3px 0" }}>
-            <span style={{ color: "#38BDF8" }}>Forecast:</span>
+          <div style={{ display: "flex", justifyContent: "space-between", margin: "4px 0" }}>
+            <span style={{ color: "var(--sky-400)", fontWeight: 500 }}>LightGBM Forecast:</span>
             <span style={{ fontWeight: 700 }}>
-              {item.forecast_kw !== null ? `${item.forecast_kw.toLocaleString()} kW` : "N/A"}
+              {item.forecast_kw !== null ? `${Math.round(item.forecast_kw).toLocaleString()} kW` : "N/A"}
             </span>
           </div>
 
           {item.actual_kw !== null && (
-            <div style={{ display: "flex", justifyContent: "space-between", margin: "3px 0" }}>
-              <span style={{ color: "#10B981" }}>Actual Telemetry:</span>
-              <span style={{ fontWeight: 700 }}>{item.actual_kw.toLocaleString()} kW</span>
+            <div style={{ display: "flex", justifyContent: "space-between", margin: "4px 0" }}>
+              <span style={{ color: "var(--emerald-400)", fontWeight: 500 }}>Actual Telemetry:</span>
+              <span style={{ fontWeight: 700 }}>{Math.round(item.actual_kw).toLocaleString()} kW</span>
             </div>
           )}
 
           {item.schedule_kw !== null && (
-            <div style={{ display: "flex", justifyContent: "space-between", margin: "3px 0" }}>
-              <span style={{ color: "#F59E0B" }}>Committed Schedule:</span>
-              <span style={{ fontWeight: 700 }}>{item.schedule_kw.toLocaleString()} kW</span>
+            <div style={{ display: "flex", justifyContent: "space-between", margin: "4px 0" }}>
+              <span style={{ color: "var(--amber-400)", fontWeight: 500 }}>Committed Schedule:</span>
+              <span style={{ fontWeight: 700 }}>{Math.round(item.schedule_kw).toLocaleString()} kW</span>
             </div>
           )}
 
           {item.band_upper !== null && item.band_lower !== null && (
-            <div style={{ display: "flex", justifyContent: "space-between", margin: "3px 0", color: "#94A3B8" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", margin: "4px 0", color: "var(--text-muted)" }}>
               <span>DSM ±{tolerancePct}% Band:</span>
-              <span>{Math.round(item.band_lower)} - {Math.round(item.band_upper)} kW</span>
+              <span>{Math.round(item.band_lower).toLocaleString()} - {Math.round(item.band_upper).toLocaleString()} kW</span>
             </div>
           )}
 
           {item.isBreach && (
             <div
               style={{
-                marginTop: "6px",
-                padding: "4px 6px",
-                backgroundColor: "#7F1D1D",
-                color: "#FCA5A5",
-                borderRadius: "4px",
+                marginTop: "8px",
+                padding: "6px 8px",
+                backgroundColor: "var(--breach-red-bg)",
+                border: "1px solid var(--breach-red-border)",
+                color: "var(--breach-red)",
+                borderRadius: "var(--radius-sm)",
                 fontWeight: 700,
                 textAlign: "center",
+                fontSize: "0.76rem",
               }}
             >
-              ⚠ DSM BAND BREACH ({item.deviation_pct ? `${item.deviation_pct > 0 ? "+" : ""}${item.deviation_pct.toFixed(1)}%` : "Exceeded"})
+              ⚠ DSM BAND BREACH: {item.deviation_pct ? `${item.deviation_pct > 0 ? "+" : ""}${item.deviation_pct.toFixed(1)}%` : "Exceeded"} ({item.deviation_kw ? `${Math.round(item.deviation_kw).toLocaleString()} kW` : ""})
             </div>
           )}
         </div>
@@ -141,99 +167,231 @@ export const HeroChart: React.FC<HeroChartProps> = ({
     return null;
   };
 
+  const yDomain: [number, number] = useCapacityScale
+    ? [0, Math.ceil(capacityKw * 1.05)]
+    : [0, dynamicMax];
+
   return (
-    <div style={{ width: "100%", height: "380px" }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart
-          data={data}
-          margin={{ top: 15, right: 20, left: 10, bottom: 25 }}
-        >
-          <defs>
-            {/* Shaded DSM Tolerance Zone gradient */}
-            <linearGradient id="dsmBandGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#F59E0B" stopOpacity={0.18} />
-              <stop offset="100%" stopColor="#F59E0B" stopOpacity={0.04} />
-            </linearGradient>
-          </defs>
+    <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "10px" }}>
+      {/* Chart Control Toolbar */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "8px",
+          padding: "6px 12px",
+          backgroundColor: "var(--bg-app)",
+          borderRadius: "var(--radius-sm)",
+          border: "1px solid var(--border-subtle)",
+          fontSize: "0.76rem",
+        }}
+      >
+        {/* Series Filter Pills */}
+        <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+          <button
+            onClick={() => setShowForecast(!showForecast)}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+              padding: "3px 8px",
+              borderRadius: "var(--radius-sm)",
+              backgroundColor: showForecast ? "rgba(56, 189, 248, 0.15)" : "transparent",
+              color: showForecast ? "var(--sky-400)" : "var(--text-muted)",
+              border: `1px solid ${showForecast ? "var(--sky-500)" : "var(--border-subtle)"}`,
+              cursor: "pointer",
+              fontWeight: 600,
+            }}
+          >
+            <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "var(--sky-400)" }} />
+            Forecast
+          </button>
 
-          <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" vertical={false} />
+          <button
+            onClick={() => setShowSchedule(!showSchedule)}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+              padding: "3px 8px",
+              borderRadius: "var(--radius-sm)",
+              backgroundColor: showSchedule ? "rgba(245, 158, 11, 0.15)" : "transparent",
+              color: showSchedule ? "var(--amber-400)" : "var(--text-muted)",
+              border: `1px solid ${showSchedule ? "var(--amber-500)" : "var(--border-subtle)"}`,
+              cursor: "pointer",
+              fontWeight: 600,
+            }}
+          >
+            <span style={{ width: "8px", height: "8px", borderRadius: "2px", backgroundColor: "var(--amber-400)" }} />
+            Schedule
+          </button>
 
-          <XAxis
-            dataKey="timeLabel"
-            stroke="#64748B"
-            tick={{ fontSize: 11, fill: "#94A3B8" }}
-            tickLine={{ stroke: "#334155" }}
-            interval={8}
-          />
+          <button
+            onClick={() => setShowActual(!showActual)}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+              padding: "3px 8px",
+              borderRadius: "var(--radius-sm)",
+              backgroundColor: showActual ? "rgba(16, 185, 129, 0.15)" : "transparent",
+              color: showActual ? "var(--emerald-400)" : "var(--text-muted)",
+              border: `1px solid ${showActual ? "var(--emerald-500)" : "var(--border-subtle)"}`,
+              cursor: "pointer",
+              fontWeight: 600,
+            }}
+          >
+            <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "var(--emerald-400)" }} />
+            Actual Telemetry
+          </button>
 
-          <YAxis
-            stroke="#64748B"
-            tick={{ fontSize: 11, fill: "#94A3B8" }}
-            tickLine={{ stroke: "#334155" }}
-            tickFormatter={formatKw}
-            domain={[0, Math.ceil(capacityKw * 1.05)]}
-          />
+          <button
+            onClick={() => setShowToleranceBand(!showToleranceBand)}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+              padding: "3px 8px",
+              borderRadius: "var(--radius-sm)",
+              backgroundColor: showToleranceBand ? "rgba(245, 158, 11, 0.1)" : "transparent",
+              color: showToleranceBand ? "var(--text-secondary)" : "var(--text-muted)",
+              border: `1px solid ${showToleranceBand ? "var(--amber-500)" : "var(--border-subtle)"}`,
+              cursor: "pointer",
+              fontWeight: 600,
+            }}
+          >
+            ±{tolerancePct}% Band
+          </button>
+        </div>
 
-          <Tooltip content={<CustomTooltip />} />
+        {/* Scale Toggle: Dynamic Auto-Scale vs Full Capacity */}
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <span style={{ color: "var(--text-muted)" }}>Y-Axis Scale:</span>
+          <button
+            onClick={() => setUseCapacityScale(!useCapacityScale)}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "5px",
+              padding: "4px 9px",
+              borderRadius: "var(--radius-sm)",
+              backgroundColor: "var(--bg-surface-elevated)",
+              color: "var(--text-primary)",
+              border: "1px solid var(--border-default)",
+              cursor: "pointer",
+              fontWeight: 600,
+            }}
+          >
+            {useCapacityScale ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+            <span>{useCapacityScale ? `Capacity (0 - ${formatKw(capacityKw)})` : `Auto-Scale (0 - ${formatKw(dynamicMax)})`}</span>
+          </button>
+        </div>
+      </div>
 
-          {/* Shaded DSM Tolerance Band: Render band_upper line and fill towards base */}
-          <Area
-            type="monotone"
-            dataKey="band_upper"
-            stroke="transparent"
-            fill="url(#dsmBandGradient)"
-            name="DSM Tolerance Band"
-            isAnimationActive={false}
-          />
+      {/* Main Chart Container */}
+      <div style={{ width: "100%", height: "400px" }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart
+            data={data}
+            margin={{ top: 15, right: 20, left: 10, bottom: 25 }}
+          >
+            <defs>
+              {/* Shaded DSM Tolerance Zone gradient */}
+              <linearGradient id="dsmBandGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#F59E0B" stopOpacity={0.2} />
+                <stop offset="100%" stopColor="#F59E0B" stopOpacity={0.03} />
+              </linearGradient>
+            </defs>
 
-          {/* Schedule reference line */}
-          <Line
-            type="stepAfter"
-            dataKey="schedule_kw"
-            stroke="#F59E0B"
-            strokeWidth={2}
-            strokeDasharray="4 4"
-            dot={false}
-            name="Schedule"
-            isAnimationActive={false}
-          />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
 
-          {/* 15-min ML Generation Forecast */}
-          <Line
-            type="monotone"
-            dataKey="forecast_kw"
-            stroke="#38BDF8"
-            strokeWidth={2.5}
-            dot={false}
-            name="Forecast"
-            isAnimationActive={false}
-          />
-
-          {/* Actual Ingested Telemetry */}
-          <Line
-            type="monotone"
-            dataKey="actual_kw"
-            stroke="#10B981"
-            strokeWidth={2}
-            dot={{ r: 2, fill: "#10B981" }}
-            name="Actual Telemetry"
-            isAnimationActive={false}
-          />
-
-          {/* Red warning dots for DSM Breaches */}
-          {breachPoints.map((pt, i) => (
-            <ReferenceDot
-              key={`breach-${i}`}
-              x={pt.timeLabel}
-              y={pt.forecast_kw ?? 0}
-              r={4.5}
-              fill="#EF4444"
-              stroke="#FFF"
-              strokeWidth={1.5}
+            <XAxis
+              dataKey="timeLabel"
+              stroke="var(--text-muted)"
+              tick={{ fontSize: 11, fill: "var(--text-secondary)" }}
+              tickLine={{ stroke: "var(--border-subtle)" }}
+              interval={7}
             />
-          ))}
-        </ComposedChart>
-      </ResponsiveContainer>
+
+            <YAxis
+              stroke="var(--text-muted)"
+              tick={{ fontSize: 11, fill: "var(--text-secondary)" }}
+              tickLine={{ stroke: "var(--border-subtle)" }}
+              tickFormatter={formatKw}
+              domain={yDomain}
+            />
+
+            <Tooltip content={<CustomTooltip />} />
+
+            {/* Shaded DSM Tolerance Band */}
+            {showToleranceBand && (
+              <Area
+                type="monotone"
+                dataKey="band_upper"
+                stroke="transparent"
+                fill="url(#dsmBandGradient)"
+                name="DSM Tolerance Band"
+                isAnimationActive={false}
+              />
+            )}
+
+            {/* Schedule reference step line */}
+            {showSchedule && (
+              <Line
+                type="stepAfter"
+                dataKey="schedule_kw"
+                stroke="var(--amber-400)"
+                strokeWidth={2}
+                strokeDasharray="4 4"
+                dot={false}
+                name="Committed Schedule"
+                isAnimationActive={false}
+              />
+            )}
+
+            {/* 15-min ML Generation Forecast */}
+            {showForecast && (
+              <Line
+                type="monotone"
+                dataKey="forecast_kw"
+                stroke="var(--sky-400)"
+                strokeWidth={2.5}
+                dot={false}
+                name="Forecast"
+                isAnimationActive={false}
+              />
+            )}
+
+            {/* Actual Ingested Telemetry */}
+            {showActual && (
+              <Line
+                type="monotone"
+                dataKey="actual_kw"
+                stroke="var(--emerald-400)"
+                strokeWidth={2}
+                dot={{ r: 2.5, fill: "var(--emerald-400)" }}
+                name="Actual Telemetry"
+                isAnimationActive={false}
+              />
+            )}
+
+            {/* Red warning dots for DSM Breaches */}
+            {breachPoints.map((pt, i) => (
+              <ReferenceDot
+                key={`breach-${i}`}
+                x={pt.timeLabel}
+                y={pt.forecast_kw ?? 0}
+                r={5}
+                fill="var(--breach-red)"
+                stroke="#FFFFFF"
+                strokeWidth={1.5}
+              />
+            ))}
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
 
       {/* High-visibility Legend */}
       <div
@@ -241,30 +399,30 @@ export const HeroChart: React.FC<HeroChartProps> = ({
           display: "flex",
           justifyContent: "center",
           gap: "1.5rem",
-          marginTop: "0.5rem",
-          fontSize: "0.8rem",
+          marginTop: "0.25rem",
+          fontSize: "0.78rem",
           flexWrap: "wrap",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          <span style={{ width: "16px", height: "3px", backgroundColor: "#38BDF8" }} />
-          <span style={{ color: "#E2E8F0" }}>Forecast (LightGBM)</span>
+          <span style={{ width: "16px", height: "3px", backgroundColor: "var(--sky-400)" }} />
+          <span style={{ color: "var(--text-secondary)" }}>LightGBM Forecast</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          <span style={{ width: "16px", height: "3px", backgroundColor: "#10B981" }} />
-          <span style={{ color: "#E2E8F0" }}>Actual Telemetry (Simulator)</span>
+          <span style={{ width: "16px", height: "3px", backgroundColor: "var(--emerald-400)" }} />
+          <span style={{ color: "var(--text-secondary)" }}>Actual Telemetry (MQTT)</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          <span style={{ width: "16px", height: "2px", borderTop: "2px dashed #F59E0B" }} />
-          <span style={{ color: "#E2E8F0" }}>Committed Schedule</span>
+          <span style={{ width: "16px", height: "2px", borderTop: "2px dashed var(--amber-400)" }} />
+          <span style={{ color: "var(--text-secondary)" }}>Committed Schedule</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          <span style={{ width: "12px", height: "12px", backgroundColor: "rgba(245, 158, 11, 0.25)", border: "1px solid #F59E0B" }} />
-          <span style={{ color: "#E2E8F0" }}>DSM ±{tolerancePct}% Band</span>
+          <span style={{ width: "12px", height: "12px", backgroundColor: "rgba(245, 158, 11, 0.25)", border: "1px solid var(--amber-500)" }} />
+          <span style={{ color: "var(--text-secondary)" }}>DSM ±{tolerancePct}% Band</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#EF4444" }} />
-          <span style={{ color: "#EF4444", fontWeight: 700 }}>DSM Breach Block</span>
+          <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "var(--breach-red)" }} />
+          <span style={{ color: "var(--breach-red)", fontWeight: 700 }}>DSM Breach Block</span>
         </div>
       </div>
     </div>

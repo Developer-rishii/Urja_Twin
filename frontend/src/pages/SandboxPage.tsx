@@ -1,25 +1,3 @@
-/**
- * Sandbox What-If Scenarios Page & Node Health Monitor (Task T12).
- *
- * Features:
- * 1. Scenario Selection:
- *    - Panel Washing (`clean_panels`)
- *    - Add Battery Storage (`add_battery`) with interactive capacity slider (1 to 50 MWh)
- *    - Plant Expansion (`add_capacity`, +15%)
- *    - Monsoon Cloud Event (`monsoon_cloud`, 60% attenuation)
- * 2. Visual Outcome:
- *    - Interactive Before vs After Generation & Schedule Chart (Recharts ComposedChart)
- *    - Key Metrics: Pre/Post Generation (kWh), DSM breaches eliminated, penalty exposure drop
- *    - Explanatory summary and transparent assumptions list
- * 3. Sensor Node Health Monitor:
- *    - Node connectivity status (`ONLINE` vs `OFFLINE`)
- *    - Last telemetry packet received timestamp
- *    - Simulated node telemetry metrics (Irradiance/Module Temp / Wind Speed)
- *    - Node-offline warning alert banner when telemetry halts
- * 4. Twin Isolation Guarantee:
- *    - Badge confirming all simulations execute strictly in-memory without altering live state
- */
-
 import React, { useState, useEffect, useCallback } from "react";
 import {
   simulateScenario,
@@ -31,6 +9,9 @@ import {
 } from "../api/client";
 import { LoadingSpinner } from "../components/common/LoadingSpinner";
 import { ErrorAlert } from "../components/common/ErrorAlert";
+import { PageHeader } from "../components/common/PageHeader";
+import { Card } from "../components/common/Card";
+import { KpiCard } from "../components/common/KpiCard";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -40,6 +21,13 @@ import {
   CartesianGrid,
   Tooltip,
 } from "recharts";
+import {
+  BatteryCharging,
+  ShieldCheck,
+  AlertOctagon,
+  Sparkles,
+  FileCheck2,
+} from "lucide-react";
 
 export const SandboxPage: React.FC<{ plantId: string }> = ({ plantId }) => {
   const [scenario, setScenario] = useState<string>("add_battery");
@@ -48,9 +36,10 @@ export const SandboxPage: React.FC<{ plantId: string }> = ({ plantId }) => {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SimulationResult | null>(null);
 
-  // Node health state
   const [plantState, setPlantState] = useState<PlantStateResponse | null>(null);
   const [latestTelemetry, setLatestTelemetry] = useState<ActualBlock | null>(null);
+  const [lastSyncTime, setLastSyncTime] = useState<string>("");
+
 
   const fetchNodeHealth = useCallback(async () => {
     try {
@@ -62,6 +51,7 @@ export const SandboxPage: React.FC<{ plantId: string }> = ({ plantId }) => {
       if (actualRes.actual && actualRes.actual.length > 0) {
         setLatestTelemetry(actualRes.actual[0]);
       }
+      setLastSyncTime(new Date().toLocaleTimeString());
     } catch {
       // Graceful fallback if node is offline
     }
@@ -73,7 +63,7 @@ export const SandboxPage: React.FC<{ plantId: string }> = ({ plantId }) => {
     return () => clearInterval(interval);
   }, [fetchNodeHealth]);
 
-  // Initial simulation run on load
+  // Initial simulation run on mount
   useEffect(() => {
     handleSimulate(scenario, batteryMwh);
   }, [plantId]);
@@ -95,7 +85,6 @@ export const SandboxPage: React.FC<{ plantId: string }> = ({ plantId }) => {
   const isOnline = plantState?.node_status === "online";
   const isSolar = plantState?.plant_type === "solar_pv";
 
-  // Build chart dataset from simulation result series
   const chartData = (result?.series || []).map((s) => {
     const timeLabel = s.ts.split("T")[1]?.substring(0, 5) || s.ts;
     return {
@@ -110,109 +99,116 @@ export const SandboxPage: React.FC<{ plantId: string }> = ({ plantId }) => {
   });
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+    <div className="animate-fade-in" style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+      <PageHeader
+        title="Sandbox What-If Scenarios & Edge Node Health"
+        subtitle="Evaluate corrective operational strategies safely on an isolated in-memory twin clone without modifying live telemetry."
+        actions={
+          <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
+            Last sync: <strong style={{ color: "var(--text-secondary)" }}>{lastSyncTime || "Just now"}</strong>
+          </span>
+        }
+      />
+
       {/* Node Health & Connectivity Card */}
-      <div
-        style={{
-          backgroundColor: isOnline ? "#0F172A" : "#2B1115",
-          border: `1px solid ${isOnline ? "#1E293B" : "#EF4444"}`,
-          borderRadius: "10px",
-          padding: "1.25rem 1.5rem",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          flexWrap: "wrap",
-          gap: "1rem",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <div
-            style={{
-              width: "12px",
-              height: "12px",
-              borderRadius: "50%",
-              backgroundColor: isOnline ? "#10B981" : "#EF4444",
-              boxShadow: isOnline ? "0 0 10px #10B981" : "none",
-            }}
-          />
-          <div>
-            <div style={{ fontSize: "1rem", fontWeight: 700, color: "#F8FAFC" }}>
-              Edge Telemetry Node Health: {isOnline ? "ONLINE (Active MQTT Replay)" : "OFFLINE (Telemetry Interrupted)"}
-            </div>
-            <div style={{ fontSize: "0.75rem", color: "#94A3B8" }}>
-              Last Seen: {plantState?.last_ts || "No telemetry received"} | Power: {plantState?.actual_kw.toLocaleString()} kW
-              {latestTelemetry && isSolar && ` | Irradiance: ${latestTelemetry.irradiance ?? 0} W/m² | Temp: ${latestTelemetry.module_temp ?? 0}°C`}
-              {latestTelemetry && !isSolar && ` | Wind Speed: ${latestTelemetry.wind_speed ?? 0} m/s`}
+      <Card variant={isOnline ? "default" : "breach"} padding="md">
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "1rem",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <div
+              style={{
+                width: "12px",
+                height: "12px",
+                borderRadius: "50%",
+                backgroundColor: isOnline ? "var(--emerald-400)" : "var(--breach-red)",
+                boxShadow: isOnline ? "0 0 10px var(--emerald-400)" : "var(--breach-red-glow)",
+              }}
+            />
+            <div>
+              <div style={{ fontSize: "1rem", fontWeight: 800, color: "var(--text-primary)" }}>
+                Edge Telemetry Node Health: {isOnline ? "ONLINE (Active MQTT Replay)" : "OFFLINE (Telemetry Interrupted)"}
+              </div>
+              <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                Last Seen: {plantState?.last_ts || "No telemetry received"} | Power: {plantState?.actual_kw.toLocaleString()} kW
+                {latestTelemetry && isSolar && ` | Irradiance: ${latestTelemetry.irradiance ?? 0} W/m² | Temp: ${latestTelemetry.module_temp ?? 0}°C`}
+                {latestTelemetry && !isSolar && ` | Wind Speed: ${latestTelemetry.wind_speed ?? 0} m/s`}
+              </div>
             </div>
           </div>
-        </div>
 
-        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-          {!isOnline && (
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            {!isOnline && (
+              <span
+                style={{
+                  fontSize: "0.72rem",
+                  padding: "4px 10px",
+                  borderRadius: "var(--radius-sm)",
+                  backgroundColor: "var(--breach-red-bg)",
+                  color: "var(--breach-red)",
+                  border: "1px solid var(--breach-red-border)",
+                  fontWeight: 700,
+                }}
+              >
+                ⚠ NODE OFFLINE ALERT TRIGGERED
+              </span>
+            )}
             <span
               style={{
-                fontSize: "0.75rem",
-                padding: "4px 10px",
-                borderRadius: "4px",
-                backgroundColor: "#7F1D1D",
-                color: "#FCA5A5",
-                fontWeight: 700,
+                fontSize: "0.7rem",
+                padding: "4px 8px",
+                borderRadius: "var(--radius-sm)",
+                backgroundColor: "var(--bg-app)",
+                color: "var(--sky-400)",
+                fontWeight: 600,
+                border: "1px solid var(--border-subtle)",
               }}
             >
-              ⚠ NODE OFFLINE ALERT TRIGGERED
+              Simulated ESP32 SCADA Node
             </span>
-          )}
-          <span
-            style={{
-              fontSize: "0.7rem",
-              padding: "4px 8px",
-              borderRadius: "4px",
-              backgroundColor: "#1E293B",
-              color: "#38BDF8",
-              fontWeight: 600,
-            }}
-          >
-            Power Source: Simulated ESP32 SCADA
-          </span>
+          </div>
         </div>
-      </div>
+      </Card>
 
       {/* Simulation Controls Card */}
-      <div
-        style={{
-          backgroundColor: "#131C31",
-          borderRadius: "10px",
-          border: "1px solid #1E293B",
-          padding: "1.5rem",
-        }}
-      >
+      <Card variant="default" padding="md">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.5rem" }}>
           <div>
-            <h2 style={{ fontSize: "1.1rem", fontWeight: 700, margin: 0, color: "#F8FAFC" }}>
-              Sandbox What-If Scenarios Engine
+            <h2 style={{ fontSize: "1.1rem", fontWeight: 800, margin: 0, color: "var(--text-primary)" }}>
+              Hypothetical Simulation Controls
             </h2>
-            <p style={{ fontSize: "0.8rem", color: "#94A3B8", margin: "4px 0 1.25rem 0" }}>
-              Evaluate corrective operational strategies safely on an isolated in-memory twin clone
+            <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", margin: "4px 0 1.25rem 0" }}>
+              Compute corrective actions against baseline 24-hour schedule commitments
             </p>
           </div>
           <span
             style={{
               fontSize: "0.75rem",
               padding: "4px 10px",
-              borderRadius: "9999px",
-              backgroundColor: "#065F46",
-              color: "#6EE7B7",
+              borderRadius: "var(--radius-full)",
+              backgroundColor: "var(--emerald-bg)",
+              color: "var(--emerald-400)",
               fontWeight: 600,
-              border: "1px solid #059669",
+              border: "1px solid var(--emerald-border)",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
             }}
           >
-            ✓ Twin State Strictly Preserved (Copy Guarantee)
+            <ShieldCheck size={14} />
+            Twin State Strictly Preserved (Copy Guarantee)
           </span>
         </div>
 
         <div style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap", alignItems: "flex-end" }}>
           <div>
-            <label style={{ display: "block", fontSize: "0.75rem", color: "#94A3B8", marginBottom: "6px" }}>
+            <label style={{ display: "block", fontSize: "0.75rem", color: "var(--text-secondary)", marginBottom: "6px" }}>
               Hypothetical Scenario:
             </label>
             <select
@@ -221,11 +217,12 @@ export const SandboxPage: React.FC<{ plantId: string }> = ({ plantId }) => {
                 setScenario(e.target.value);
                 handleSimulate(e.target.value, batteryMwh);
               }}
+              aria-label="Select simulation scenario"
               style={{
-                backgroundColor: "#0F172A",
-                color: "#F8FAFC",
-                border: "1px solid #334155",
-                borderRadius: "6px",
+                backgroundColor: "var(--bg-app)",
+                color: "var(--text-primary)",
+                border: "1px solid var(--border-default)",
+                borderRadius: "var(--radius-sm)",
                 padding: "8px 14px",
                 fontSize: "0.85rem",
                 fontWeight: 600,
@@ -241,9 +238,9 @@ export const SandboxPage: React.FC<{ plantId: string }> = ({ plantId }) => {
 
           {scenario === "add_battery" && (
             <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", color: "#94A3B8" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", color: "var(--text-secondary)" }}>
                 <span>Storage Capacity:</span>
-                <strong style={{ color: "#38BDF8" }}>{batteryMwh} MWh</strong>
+                <strong style={{ color: "var(--sky-400)" }}>{batteryMwh} MWh</strong>
               </div>
               <input
                 type="range"
@@ -251,6 +248,7 @@ export const SandboxPage: React.FC<{ plantId: string }> = ({ plantId }) => {
                 max="50"
                 step="2"
                 value={batteryMwh}
+                aria-label="Storage capacity slider in megawatt-hours"
                 onChange={(e) => {
                   const val = parseFloat(e.target.value);
                   setBatteryMwh(val);
@@ -265,21 +263,23 @@ export const SandboxPage: React.FC<{ plantId: string }> = ({ plantId }) => {
           <button
             onClick={() => handleSimulate(scenario, batteryMwh)}
             disabled={loading}
+            aria-label="Run simulation on twin"
             style={{
-              backgroundColor: "#0284C7",
+              backgroundColor: "var(--sky-500)",
               color: "#FFF",
               fontWeight: 700,
               fontSize: "0.85rem",
               border: "none",
-              borderRadius: "6px",
+              borderRadius: "var(--radius-sm)",
               padding: "9px 20px",
               cursor: loading ? "not-allowed" : "pointer",
+              boxShadow: "0 2px 8px rgba(14, 165, 233, 0.35)",
             }}
           >
             {loading ? "Simulating..." : "Run on Twin"}
           </button>
         </div>
-      </div>
+      </Card>
 
       {loading && <LoadingSpinner message="Dispatching simulation algorithm on isolated twin state..." />}
       {error && <ErrorAlert title="Simulation Error" message={error} />}
@@ -287,29 +287,21 @@ export const SandboxPage: React.FC<{ plantId: string }> = ({ plantId }) => {
       {/* Simulation Result Presentation */}
       {result && (
         <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-          {/* Summary Banner */}
-          <div
-            style={{
-              backgroundColor: "#131C31",
-              borderRadius: "10px",
-              border: "1px solid #1E293B",
-              padding: "1.5rem",
-            }}
-          >
+          {/* Summary Banner & KPIs */}
+          <Card variant="elevated" padding="md">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h3 style={{ fontSize: "1.05rem", fontWeight: 700, margin: 0, color: "#F8FAFC" }}>
+              <h3 style={{ fontSize: "1.05rem", fontWeight: 800, margin: 0, color: "var(--text-primary)" }}>
                 Simulation Impact Analysis
               </h3>
-              <span style={{ fontSize: "0.8rem", color: "#38BDF8", fontWeight: 600 }}>
+              <span style={{ fontSize: "0.78rem", color: "var(--sky-400)", fontWeight: 700 }}>
                 Scenario: {result.scenario}
               </span>
             </div>
 
-            <p style={{ fontSize: "1rem", color: "#38BDF8", fontWeight: 600, margin: "0.75rem 0 1.25rem 0" }}>
+            <p style={{ fontSize: "1rem", color: "var(--sky-400)", fontWeight: 600, margin: "0.75rem 0 1.25rem 0" }}>
               {result.summary}
             </p>
 
-            {/* Before vs After Metric Cards */}
             <div
               style={{
                 display: "grid",
@@ -317,69 +309,59 @@ export const SandboxPage: React.FC<{ plantId: string }> = ({ plantId }) => {
                 gap: "1rem",
               }}
             >
-              <div style={kpiBox}>
-                <div style={kpiLabel}>BEFORE DSM BREACHES</div>
-                <div style={kpiVal}>{result.before.breach_count} Blocks</div>
-                <div style={kpiSub}>Penalty exposure: {result.before.relative_exposure_pct.toFixed(1)}%</div>
-              </div>
+              <KpiCard
+                label="Before DSM Breaches"
+                value={`${result.before.breach_count} Blocks`}
+                subValue={`Penalty exposure: ${result.before.relative_exposure_pct.toFixed(1)}%`}
+                icon={<AlertOctagon size={18} />}
+                status="default"
+              />
 
-              <div style={kpiBox}>
-                <div style={kpiLabel}>AFTER DSM BREACHES</div>
-                <div
-                  style={{
-                    ...kpiVal,
-                    color: result.after.breach_count < result.before.breach_count ? "#10B981" : "#EF4444",
-                  }}
-                >
-                  {result.after.breach_count} Blocks
-                </div>
-                <div style={kpiSub}>Penalty exposure: {result.after.relative_exposure_pct.toFixed(1)}%</div>
-              </div>
+              <KpiCard
+                label="After DSM Breaches"
+                value={`${result.after.breach_count} Blocks`}
+                subValue={`Penalty exposure: ${result.after.relative_exposure_pct.toFixed(1)}%`}
+                icon={<ShieldCheck size={18} />}
+                status={result.after.breach_count < result.before.breach_count ? "emerald" : "breach"}
+              />
 
-              <div style={kpiBox}>
-                <div style={kpiLabel}>BREACHES ELIMINATED</div>
-                <div style={{ ...kpiVal, color: "#10B981" }}>
-                  {result.impact.breaches_eliminated ?? 0} Blocks
-                </div>
-                <div style={kpiSub}>Exposure reduction: {result.impact.exposure_reduction_pct ?? 0}%</div>
-              </div>
+              <KpiCard
+                label="Breaches Eliminated"
+                value={`${result.impact.breaches_eliminated ?? 0} Blocks`}
+                subValue={`Exposure reduction: ${result.impact.exposure_reduction_pct ?? 0}%`}
+                icon={<BatteryCharging size={18} />}
+                status="emerald"
+              />
 
-              <div style={kpiBox}>
-                <div style={kpiLabel}>TOTAL 24H GENERATION</div>
-                <div style={kpiVal}>{Math.round(result.after.total_kwh).toLocaleString()} kWh</div>
-                <div style={kpiSub}>
-                  {result.impact.gain_kwh ? `+${result.impact.gain_kwh.toLocaleString()} kWh (+${result.impact.gain_pct}%)` : "Net plant output"}
-                </div>
-              </div>
+              <KpiCard
+                label="Total 24h Generation"
+                value={`${Math.round(result.after.total_kwh).toLocaleString()} kWh`}
+                subValue={result.impact.gain_kwh ? `+${result.impact.gain_kwh.toLocaleString()} kWh (+${result.impact.gain_pct}%)` : "Net plant delivery"}
+                icon={<Sparkles size={18} />}
+                status="default"
+              />
             </div>
-          </div>
+          </Card>
 
           {/* Before vs After Chart */}
-          <div
-            style={{
-              backgroundColor: "#131C31",
-              borderRadius: "10px",
-              border: "1px solid #1E293B",
-              padding: "1.5rem",
-            }}
-          >
-            <h3 style={{ fontSize: "1rem", fontWeight: 700, margin: "0 0 1rem 0", color: "#F8FAFC" }}>
+          <Card variant="default" padding="md">
+            <h3 style={{ fontSize: "1rem", fontWeight: 800, margin: "0 0 1rem 0", color: "var(--text-primary)" }}>
               Before vs After Generation & Schedule Profile (24-Hour Horizon)
             </h3>
 
             <div style={{ width: "100%", height: "300px" }}>
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={chartData} margin={{ top: 10, right: 15, left: 10, bottom: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" vertical={false} />
-                  <XAxis dataKey="timeLabel" stroke="#64748B" tick={{ fontSize: 11, fill: "#94A3B8" }} interval={11} />
-                  <YAxis stroke="#64748B" tick={{ fontSize: 11, fill: "#94A3B8" }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
+                  <XAxis dataKey="timeLabel" stroke="var(--text-muted)" tick={{ fontSize: 11, fill: "var(--text-secondary)" }} interval={11} />
+                  <YAxis stroke="var(--text-muted)" tick={{ fontSize: 11, fill: "var(--text-secondary)" }} />
                   <Tooltip
-                    contentStyle={{ backgroundColor: "#0B0F19", borderColor: "#334155", borderRadius: "8px", fontSize: "0.8rem" }}
+                    contentStyle={{ backgroundColor: "var(--bg-app)", borderColor: "var(--border-default)", borderRadius: "var(--radius-sm)", fontSize: "0.8rem" }}
                   />
                   <Line
                     type="stepAfter"
                     dataKey="schedule_kw"
-                    stroke="#F59E0B"
+                    stroke="var(--amber-500)"
                     strokeWidth={2}
                     strokeDasharray="4 4"
                     name="Committed Schedule (kW)"
@@ -388,17 +370,17 @@ export const SandboxPage: React.FC<{ plantId: string }> = ({ plantId }) => {
                   <Line
                     type="monotone"
                     dataKey="before_kw"
-                    stroke="#64748B"
+                    stroke="var(--text-muted)"
                     strokeWidth={1.5}
-                    name="Before Simulation (kW)"
+                    name="Before Profile (kW)"
                     dot={false}
                   />
                   <Line
                     type="monotone"
                     dataKey="after_kw"
-                    stroke="#38BDF8"
+                    stroke="var(--sky-400)"
                     strokeWidth={2.5}
-                    name="After Simulation (kW)"
+                    name="After Simulation (Optimized)"
                     dot={false}
                   />
                 </ComposedChart>
@@ -407,66 +389,36 @@ export const SandboxPage: React.FC<{ plantId: string }> = ({ plantId }) => {
 
             <div style={{ display: "flex", justifyContent: "center", gap: "1.5rem", marginTop: "0.5rem", fontSize: "0.75rem" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <span style={{ width: "16px", height: "2px", borderTop: "2px dashed #F59E0B" }} />
-                <span style={{ color: "#E2E8F0" }}>Committed Schedule</span>
+                <span style={{ width: "16px", height: "2px", borderTop: "2px dashed var(--amber-500)" }} />
+                <span style={{ color: "var(--text-secondary)" }}>Committed Schedule</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <span style={{ width: "16px", height: "2px", backgroundColor: "#64748B" }} />
-                <span style={{ color: "#E2E8F0" }}>Before Profile</span>
+                <span style={{ width: "16px", height: "2px", backgroundColor: "var(--text-muted)" }} />
+                <span style={{ color: "var(--text-secondary)" }}>Before Profile</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <span style={{ width: "16px", height: "3px", backgroundColor: "#38BDF8" }} />
-                <span style={{ color: "#E2E8F0" }}>After Simulation (Optimized)</span>
+                <span style={{ width: "16px", height: "3px", backgroundColor: "var(--sky-400)" }} />
+                <span style={{ color: "var(--sky-400)", fontWeight: 600 }}>After Simulation</span>
               </div>
             </div>
-          </div>
+          </Card>
 
           {/* Model Assumptions Card */}
-          <div
-            style={{
-              backgroundColor: "#131C31",
-              borderRadius: "10px",
-              border: "1px solid #1E293B",
-              padding: "1.25rem 1.5rem",
-            }}
-          >
-            <h4 style={{ fontSize: "0.9rem", fontWeight: 700, margin: "0 0 0.5rem 0", color: "#F8FAFC" }}>
-              Simulation Engine Assumptions
-            </h4>
-            <ul style={{ margin: 0, paddingLeft: "1.25rem", color: "#94A3B8", fontSize: "0.8rem", lineHeight: "1.6" }}>
+          <Card variant="elevated" padding="md">
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "0.5rem" }}>
+              <FileCheck2 size={16} color="var(--sky-400)" />
+              <h4 style={{ fontSize: "0.9rem", fontWeight: 700, margin: 0, color: "var(--text-primary)" }}>
+                Simulation Engine Constraints & Mathematical Assumptions
+              </h4>
+            </div>
+            <ul style={{ margin: 0, paddingLeft: "1.25rem", color: "var(--text-secondary)", fontSize: "0.8rem", lineHeight: "1.6" }}>
               {(result.assumptions || []).map((asm, i) => (
                 <li key={i}>{asm}</li>
               ))}
             </ul>
-          </div>
+          </Card>
         </div>
       )}
     </div>
   );
-};
-
-const kpiBox: React.CSSProperties = {
-  backgroundColor: "#0F172A",
-  padding: "1rem",
-  borderRadius: "8px",
-  border: "1px solid #1E293B",
-};
-
-const kpiLabel: React.CSSProperties = {
-  fontSize: "0.7rem",
-  fontWeight: 700,
-  color: "#94A3B8",
-  marginBottom: "0.25rem",
-};
-
-const kpiVal: React.CSSProperties = {
-  fontSize: "1.4rem",
-  fontWeight: 800,
-  color: "#F8FAFC",
-};
-
-const kpiSub: React.CSSProperties = {
-  fontSize: "0.7rem",
-  color: "#64748B",
-  marginTop: "0.2rem",
 };

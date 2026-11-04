@@ -1,15 +1,4 @@
-/**
- * Digital Twin View Component (Task T11).
- *
- * Visualizes:
- * 1. Physics Expected vs Ingested Actual Power (Thermodynamic PV & Wind Equations vs SCADA)
- * 2. Instantaneous Twin Gap (%) with color thresholds
- * 3. Daily Recalibration Status (Performance Ratio refit, before/after error, feedback loop)
- * 4. Configured Plant Physics Parameters (P_stc, gamma, PR, rotor area, Cp, cut-in speed)
- * 5. Recent Telemetry Table (Last 10 readings with node connectivity status)
- */
-
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   getPlantState,
   getPlantActual,
@@ -18,7 +7,10 @@ import {
 } from "../api/client";
 import { LoadingSpinner } from "../components/common/LoadingSpinner";
 import { ErrorAlert } from "../components/common/ErrorAlert";
-
+import { PageHeader } from "../components/common/PageHeader";
+import { Card } from "../components/common/Card";
+import { KpiCard } from "../components/common/KpiCard";
+import { Cpu, Zap, Activity, CheckCircle } from "lucide-react";
 
 export const TwinPage: React.FC<{ plantId: string }> = ({ plantId }) => {
   const [state, setState] = useState<PlantStateResponse | null>(null);
@@ -27,8 +19,10 @@ export const TwinPage: React.FC<{ plantId: string }> = ({ plantId }) => {
   const [error, setError] = useState<string | null>(null);
   const [lastSyncTime, setLastSyncTime] = useState<string>("");
 
+  const isInitialMount = useRef(true);
+
   const fetchData = useCallback(async (isInitial = false) => {
-    if (isInitial) setLoading(true);
+    if (isInitial && isInitialMount.current) setLoading(true);
     setError(null);
     try {
       const [stateRes, actualRes] = await Promise.all([
@@ -41,11 +35,15 @@ export const TwinPage: React.FC<{ plantId: string }> = ({ plantId }) => {
     } catch (err: any) {
       setError(err?.response?.data?.detail || err.message || "Failed to load twin state");
     } finally {
-      if (isInitial) setLoading(false);
+      if (isInitial && isInitialMount.current) {
+        setLoading(false);
+        isInitialMount.current = false;
+      }
     }
   }, [plantId]);
 
   useEffect(() => {
+    isInitialMount.current = true;
     fetchData(true);
     const interval = setInterval(() => fetchData(false), 5000);
     return () => clearInterval(interval);
@@ -58,59 +56,66 @@ export const TwinPage: React.FC<{ plantId: string }> = ({ plantId }) => {
   const gapPct = state?.gap_pct ?? 0;
   const isOnline = state?.node_status === "online";
 
-
-
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+    <div className="animate-fade-in" style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+      <PageHeader
+        title="Physics Digital Twin & Sensor Telemetry"
+        subtitle="Continuous thermodynamic equations coupled with real-time SCADA telemetry feedback and daily recalibration loops."
+        actions={
+          <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
+            Last sync: <strong style={{ color: "var(--text-secondary)" }}>{lastSyncTime || "Just now"}</strong>
+          </span>
+        }
+      />
+
       {/* Synchronization Status Banner */}
-      <div
-        style={{
-          backgroundColor: "#131C31",
-          borderRadius: "10px",
-          border: "1px solid #1E293B",
-          padding: "1.25rem 1.5rem",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          flexWrap: "wrap",
-          gap: "1rem",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <div
-            style={{
-              width: "12px",
-              height: "12px",
-              borderRadius: "50%",
-              backgroundColor: isOnline ? "#10B981" : "#EF4444",
-              boxShadow: isOnline ? "0 0 10px #10B981" : "none",
-            }}
-          />
-          <div>
-            <div style={{ fontSize: "1rem", fontWeight: 700, color: "#F8FAFC" }}>
-              Digital Twin Synchronization: {isOnline ? "LIVE SYNCED" : "NODE DISCONNECTED"}
-            </div>
-            <div style={{ fontSize: "0.75rem", color: "#94A3B8" }}>
-              Plant Type: {isSolar ? "Solar PV (IEC 61724 Standard)" : "Wind Turbine (SCADA Aerodynamic Model)"} | Last sync: {lastSyncTime}
+      <Card variant="default" padding="md">
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "1rem",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <div
+              style={{
+                width: "12px",
+                height: "12px",
+                borderRadius: "50%",
+                backgroundColor: isOnline ? "var(--emerald-400)" : "var(--breach-red)",
+                boxShadow: isOnline ? "0 0 10px var(--emerald-400)" : "var(--breach-red-glow)",
+              }}
+            />
+            <div>
+              <div style={{ fontSize: "1.05rem", fontWeight: 800, color: "var(--text-primary)" }}>
+                Digital Twin Synchronization: {isOnline ? "LIVE SYNCED" : "NODE DISCONNECTED"}
+              </div>
+              <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)" }}>
+                Model Standard: {isSolar ? "Solar PV (IEC 61724 First Principles)" : "Wind Turbine (Betz Law SCADA Model)"}
+              </div>
             </div>
           </div>
-        </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <span
-            style={{
-              fontSize: "0.75rem",
-              padding: "4px 10px",
-              borderRadius: "9999px",
-              backgroundColor: Math.abs(gapPct) > 10 ? "#7F1D1D" : "#065F46",
-              color: Math.abs(gapPct) > 10 ? "#FCA5A5" : "#6EE7B7",
-              fontWeight: 700,
-            }}
-          >
-            Twin Gap: {gapPct > 0 ? `+${gapPct}%` : `${gapPct}%`}
-          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span
+              style={{
+                fontSize: "0.75rem",
+                padding: "4px 12px",
+                borderRadius: "var(--radius-full)",
+                backgroundColor: Math.abs(gapPct) > 10 ? "var(--amber-bg)" : "var(--emerald-bg)",
+                color: Math.abs(gapPct) > 10 ? "var(--amber-400)" : "var(--emerald-400)",
+                border: `1px solid ${Math.abs(gapPct) > 10 ? "var(--amber-border)" : "var(--emerald-border)"}`,
+                fontWeight: 700,
+              }}
+            >
+              Twin Gap: {gapPct > 0 ? `+${gapPct}%` : `${gapPct}%`}
+            </span>
+          </div>
         </div>
-      </div>
+      </Card>
 
       {/* Physics KPI Cards */}
       <div
@@ -120,46 +125,47 @@ export const TwinPage: React.FC<{ plantId: string }> = ({ plantId }) => {
           gap: "1rem",
         }}
       >
-        <div style={statBox}>
-          <div style={statLabel}>ACTUAL INGESTED POWER</div>
-          <div style={statVal}>{state?.actual_kw.toLocaleString()} kW</div>
-          <div style={statSub}>Telemetry from node</div>
-        </div>
+        <KpiCard
+          label="Actual Ingested Power"
+          value={`${state?.actual_kw.toLocaleString()} kW`}
+          subValue="Telemetry reading from node"
+          icon={<Zap size={18} />}
+          status="default"
+        />
 
-        <div style={statBox}>
-          <div style={statLabel}>PHYSICS MODEL OUTPUT</div>
-          <div style={statVal}>{state?.expected_kw.toLocaleString()} kW</div>
-          <div style={statSub}>Equation expected power</div>
-        </div>
+        <KpiCard
+          label="Physics Model Output"
+          value={`${state?.expected_kw.toLocaleString()} kW`}
+          subValue="Physical equation expected power"
+          icon={<Cpu size={18} />}
+          status="default"
+        />
 
-        <div style={statBox}>
-          <div style={statLabel}>ESTIMATED SOILING LOSS</div>
-          <div style={{ ...statVal, color: (state?.soiling_loss_pct || 0) > 10 ? "#F59E0B" : "#38BDF8" }}>
-            {state?.soiling_loss_pct.toFixed(2)}%
-          </div>
-          <div style={statSub}>Rolling actual/expected ratio</div>
-        </div>
+        <KpiCard
+          label="Estimated Soiling Loss"
+          value={`${state?.soiling_loss_pct.toFixed(2)}%`}
+          subValue="Rolling actual/expected daytime ratio"
+          icon={<Activity size={18} />}
+          status={(state?.soiling_loss_pct || 0) > 10 ? "amber" : "default"}
+          badge={(state?.soiling_loss_pct || 0) > 10 ? "WASH REQ" : "CLEAR"}
+        />
 
-        <div style={statBox}>
-          <div style={statLabel}>DAILY RECALIBRATION STATUS</div>
-          <div style={{ ...statVal, color: "#10B981" }}>ACTIVE</div>
-          <div style={statSub}>Continuous PR / Cp feedback loop</div>
-        </div>
+        <KpiCard
+          label="Daily Recalibration"
+          value="ACTIVE"
+          subValue="Continuous PR / Cp parameter fit loop"
+          icon={<CheckCircle size={18} />}
+          status="emerald"
+          badge="FEEDBACK LOOP"
+        />
       </div>
 
-      {/* Plant Physics Formula & Parameter Specifications */}
-      <div
-        style={{
-          backgroundColor: "#131C31",
-          borderRadius: "10px",
-          border: "1px solid #1E293B",
-          padding: "1.5rem",
-        }}
-      >
-        <h3 style={{ fontSize: "1rem", fontWeight: 700, margin: 0, color: "#F8FAFC" }}>
+      {/* Active Physics Equations & Calibrated Coefficients */}
+      <Card variant="elevated" padding="md">
+        <h3 style={{ fontSize: "1.05rem", fontWeight: 800, margin: 0, color: "var(--text-primary)" }}>
           Active Physics Model Equations & Calibrated Coefficients
         </h3>
-        <p style={{ fontSize: "0.8rem", color: "#94A3B8", margin: "4px 0 1rem 0" }}>
+        <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", margin: "4px 0 1rem 0" }}>
           {isSolar
             ? "P_pv = P_stc × (G / 1000) × [1 + γ(T_cell - 25)] × (1 - L_soil) × PR"
             : "P_wind = min(P_rated, 0.5 × ρ × A × Cp × v_hub³) for v_cut_in ≤ v ≤ v_cut_out"}
@@ -168,7 +174,7 @@ export const TwinPage: React.FC<{ plantId: string }> = ({ plantId }) => {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
             gap: "0.75rem",
           }}
         >
@@ -180,7 +186,7 @@ export const TwinPage: React.FC<{ plantId: string }> = ({ plantId }) => {
               </div>
               <div style={paramCard}>
                 <span style={paramLabel}>Temp Coefficient (γ):</span>
-                <span style={paramVal}>-0.004 / °C (c-Si assumption)</span>
+                <span style={paramVal}>-0.004 / °C (c-Si)</span>
               </div>
               <div style={paramCard}>
                 <span style={paramLabel}>Performance Ratio (PR):</span>
@@ -188,7 +194,7 @@ export const TwinPage: React.FC<{ plantId: string }> = ({ plantId }) => {
               </div>
               <div style={paramCard}>
                 <span style={paramLabel}>Irradiance Unit:</span>
-                <span style={paramVal}>W/m² (Scaled from dataset)</span>
+                <span style={paramVal}>W/m² (Scaled)</span>
               </div>
             </>
           ) : (
@@ -212,34 +218,28 @@ export const TwinPage: React.FC<{ plantId: string }> = ({ plantId }) => {
             </>
           )}
         </div>
-      </div>
+      </Card>
 
       {/* Recent Telemetry Table */}
-      <div
-        style={{
-          backgroundColor: "#131C31",
-          borderRadius: "10px",
-          border: "1px solid #1E293B",
-          padding: "1.5rem",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+      <Card variant="default" padding="md">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "0.5rem" }}>
           <div>
-            <h3 style={{ fontSize: "1rem", fontWeight: 700, margin: 0, color: "#F8FAFC" }}>
-              Recent Ingested Telemetry Stream ({recentReadings.length} readings)
+            <h3 style={{ fontSize: "1rem", fontWeight: 700, margin: 0, color: "var(--text-primary)" }}>
+              Recent Ingested Telemetry Buffer ({recentReadings.length} readings)
             </h3>
-            <p style={{ fontSize: "0.75rem", color: "#94A3B8", margin: "2px 0 0 0" }}>
+            <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: "2px 0 0 0" }}>
               Ingested via Mosquitto MQTT (`urjatwin/{state?.plant_id}/telemetry`)
             </p>
           </div>
           <span
             style={{
-              fontSize: "0.75rem",
+              fontSize: "0.72rem",
               padding: "3px 8px",
-              borderRadius: "4px",
-              backgroundColor: isOnline ? "#065F46" : "#7F1D1D",
-              color: "#FFF",
-              fontWeight: 600,
+              borderRadius: "var(--radius-sm)",
+              backgroundColor: isOnline ? "var(--emerald-bg)" : "var(--breach-red-bg)",
+              color: isOnline ? "var(--emerald-400)" : "var(--breach-red)",
+              border: `1px solid ${isOnline ? "var(--emerald-border)" : "var(--breach-red-border)"}`,
+              fontWeight: 700,
             }}
           >
             Sensor Node: {state?.node_status.toUpperCase()}
@@ -247,7 +247,7 @@ export const TwinPage: React.FC<{ plantId: string }> = ({ plantId }) => {
         </div>
 
         {recentReadings.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "2rem", color: "#64748B", fontSize: "0.85rem" }}>
+          <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)", fontSize: "0.85rem" }}>
             No telemetry readings in buffer. Start simulator replay (`python simulator/replay.py`).
           </div>
         ) : (
@@ -261,44 +261,46 @@ export const TwinPage: React.FC<{ plantId: string }> = ({ plantId }) => {
               }}
             >
               <thead>
-                <tr style={{ borderBottom: "1px solid #334155", color: "#94A3B8" }}>
-                  <th style={{ padding: "8px 12px" }}>Timestamp</th>
-                  <th style={{ padding: "8px 12px" }}>Power Output (kW)</th>
+                <tr style={{ borderBottom: "1px solid var(--border-default)", color: "var(--text-muted)" }}>
+                  <th style={{ padding: "10px 12px" }}>Timestamp</th>
+                  <th style={{ padding: "10px 12px" }}>Power Output (kW)</th>
                   {isSolar ? (
                     <>
-                      <th style={{ padding: "8px 12px" }}>Irradiance (W/m²)</th>
-                      <th style={{ padding: "8px 12px" }}>Module Temp (°C)</th>
+                      <th style={{ padding: "10px 12px" }}>Irradiance (W/m²)</th>
+                      <th style={{ padding: "10px 12px" }}>Module Temp (°C)</th>
                     </>
                   ) : (
-                    <th style={{ padding: "8px 12px" }}>Wind Speed (m/s)</th>
+                    <th style={{ padding: "10px 12px" }}>Wind Speed (m/s)</th>
                   )}
-                  <th style={{ padding: "8px 12px" }}>Status</th>
+                  <th style={{ padding: "10px 12px" }}>Validation Status</th>
                 </tr>
               </thead>
               <tbody>
                 {recentReadings.slice(-10).reverse().map((r, i) => (
-                  <tr key={i} style={{ borderBottom: "1px solid #1E293B", color: "#F1F5F9" }}>
-                    <td style={{ padding: "8px 12px", fontFamily: "monospace" }}>{r.ts}</td>
-                    <td style={{ padding: "8px 12px", fontWeight: 700, color: "#38BDF8" }}>
+                  <tr key={i} style={{ borderBottom: "1px solid var(--border-subtle)", color: "var(--text-primary)" }}>
+                    <td style={{ padding: "10px 12px", fontFamily: "var(--font-mono)", fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                      {r.ts}
+                    </td>
+                    <td style={{ padding: "10px 12px", fontWeight: 700, color: "var(--sky-400)" }}>
                       {r.power_kw.toLocaleString()} kW
                     </td>
                     {isSolar ? (
                       <>
-                        <td style={{ padding: "8px 12px" }}>{r.irradiance ?? "N/A"}</td>
-                        <td style={{ padding: "8px 12px" }}>{r.module_temp ?? "N/A"}</td>
+                        <td style={{ padding: "10px 12px" }}>{r.irradiance ?? "N/A"}</td>
+                        <td style={{ padding: "10px 12px" }}>{r.module_temp ?? "N/A"}</td>
                       </>
                     ) : (
-                      <td style={{ padding: "8px 12px" }}>{r.wind_speed ?? "N/A"}</td>
+                      <td style={{ padding: "10px 12px" }}>{r.wind_speed ?? "N/A"}</td>
                     )}
-                    <td style={{ padding: "8px 12px" }}>
+                    <td style={{ padding: "10px 12px" }}>
                       <span
                         style={{
-                          fontSize: "0.7rem",
-                          backgroundColor: "#065F46",
-                          color: "#6EE7B7",
+                          fontSize: "0.68rem",
+                          backgroundColor: "var(--emerald-bg)",
+                          color: "var(--emerald-400)",
                           padding: "2px 6px",
-                          borderRadius: "3px",
-                          fontWeight: 600,
+                          borderRadius: "var(--radius-sm)",
+                          fontWeight: 700,
                         }}
                       >
                         VALIDATED
@@ -310,42 +312,16 @@ export const TwinPage: React.FC<{ plantId: string }> = ({ plantId }) => {
             </table>
           </div>
         )}
-      </div>
+      </Card>
     </div>
   );
 };
 
-const statBox: React.CSSProperties = {
-  backgroundColor: "#0F172A",
-  padding: "1.25rem",
-  borderRadius: "8px",
-  border: "1px solid #1E293B",
-};
-
-const statLabel: React.CSSProperties = {
-  fontSize: "0.7rem",
-  fontWeight: 700,
-  color: "#94A3B8",
-  marginBottom: "0.35rem",
-};
-
-const statVal: React.CSSProperties = {
-  fontSize: "1.5rem",
-  fontWeight: 800,
-  color: "#F8FAFC",
-};
-
-const statSub: React.CSSProperties = {
-  fontSize: "0.7rem",
-  color: "#64748B",
-  marginTop: "0.25rem",
-};
-
 const paramCard: React.CSSProperties = {
-  backgroundColor: "#0F172A",
+  backgroundColor: "var(--bg-app)",
   padding: "10px 14px",
-  borderRadius: "6px",
-  border: "1px solid #1E293B",
+  borderRadius: "var(--radius-sm)",
+  border: "1px solid var(--border-subtle)",
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
@@ -353,10 +329,10 @@ const paramCard: React.CSSProperties = {
 };
 
 const paramLabel: React.CSSProperties = {
-  color: "#94A3B8",
+  color: "var(--text-secondary)",
 };
 
 const paramVal: React.CSSProperties = {
   fontWeight: 700,
-  color: "#F8FAFC",
+  color: "var(--text-primary)",
 };
