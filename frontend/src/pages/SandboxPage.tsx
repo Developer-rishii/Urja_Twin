@@ -32,6 +32,7 @@ import {
 export const SandboxPage: React.FC<{ plantId: string }> = ({ plantId }) => {
   const [scenario, setScenario] = useState<string>("add_battery");
   const [batteryMwh, setBatteryMwh] = useState<number>(20.0);
+  const [capacityPct, setCapacityPct] = useState<number>(15.0);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SimulationResult | null>(null);
@@ -68,11 +69,16 @@ export const SandboxPage: React.FC<{ plantId: string }> = ({ plantId }) => {
     handleSimulate(scenario, batteryMwh);
   }, [plantId]);
 
-  const handleSimulate = async (sc = scenario, mwh = batteryMwh) => {
+  const handleSimulate = async (sc = scenario, mwh = batteryMwh, capPct = capacityPct) => {
     setLoading(true);
     setError(null);
     try {
-      const params = sc === "add_battery" ? { capacity_mwh: mwh } : {};
+      let params: Record<string, any> = {};
+      if (sc === "add_battery") {
+        params = { capacity_mwh: mwh };
+      } else if (sc === "add_capacity") {
+        params = { capacity_pct: capPct };
+      }
       const res = await simulateScenario(plantId, sc, params);
       setResult(res.simulation);
     } catch (err: any) {
@@ -231,7 +237,7 @@ export const SandboxPage: React.FC<{ plantId: string }> = ({ plantId }) => {
             >
               <option value="add_battery">Add Battery Storage (BESS DSM Mitigation)</option>
               <option value="clean_panels">Panel Washing (Zero Soiling Loss)</option>
-              <option value="add_capacity">Expand Plant Capacity (+15%)</option>
+              <option value="add_capacity">Expand Plant Capacity (What-If Scaling)</option>
               <option value="monsoon_cloud">Severe Monsoon Cloud Cover (60% drop)</option>
             </select>
           </div>
@@ -253,8 +259,32 @@ export const SandboxPage: React.FC<{ plantId: string }> = ({ plantId }) => {
                   const val = parseFloat(e.target.value);
                   setBatteryMwh(val);
                 }}
-                onMouseUp={() => handleSimulate("add_battery", batteryMwh)}
-                onTouchEnd={() => handleSimulate("add_battery", batteryMwh)}
+                onMouseUp={() => handleSimulate("add_battery", batteryMwh, capacityPct)}
+                onTouchEnd={() => handleSimulate("add_battery", batteryMwh, capacityPct)}
+                style={{ width: "200px", cursor: "pointer" }}
+              />
+            </div>
+          )}
+
+          {scenario === "add_capacity" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                <span>Capacity Expansion:</span>
+                <strong style={{ color: "var(--cyan-400)" }}>+{capacityPct}%</strong>
+              </div>
+              <input
+                type="range"
+                min="5"
+                max="50"
+                step="5"
+                value={capacityPct}
+                aria-label="Plant capacity expansion percentage slider"
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  setCapacityPct(val);
+                }}
+                onMouseUp={() => handleSimulate("add_capacity", batteryMwh, capacityPct)}
+                onTouchEnd={() => handleSimulate("add_capacity", batteryMwh, capacityPct)}
                 style={{ width: "200px", cursor: "pointer" }}
               />
             </div>
